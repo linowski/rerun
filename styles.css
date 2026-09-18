@@ -1,0 +1,2317 @@
+@import url('https://fonts.googleapis.com/css2?family=Mulish:wght@400;500;600;700;800;900&display=swap');
+
+:root {
+    --surface: #ffffff;
+    --surface-page: #f2f4f7;
+    --surface-soft: #f9f9f9;
+    --surface-header: #fafafa;
+    --surface-control: #f0f0f0;
+    --hover-blue: #e3f2fd;
+    /* Translucent white over a blue row: fields stay legible without cutting a
+       hard white rectangle out of the block. */
+    --field-tint: rgba(255, 255, 255, 0.55);
+    --text-strong: #2c2c2c;
+    --text-body: #333;
+    --text-muted: #555;
+    --text-subtle: #888;
+    --text-faint: #999;
+    --border: #e0e0e0;
+    /* Row separators: --row-divider between experiment families, the softer
+       --row-divider-soft within one (parent to its comparison rows). */
+    --row-divider: #d7dce3;
+    --row-divider-soft: #e8ebef;
+    --accent: #0066cc;
+    --accent-dark: #0052a3;
+    --success: #28a745;
+    --warning: #e0a800;
+    --danger: #dc3545;
+    --signal-fill: #555;
+    --highlight-text: #1f1f1f;
+    --highlight-bg: #fff3cd;
+    --panel-border: rgba(20, 30, 45, 0.06);
+    --panel-shadow: 0 2px 6px rgba(20, 30, 45, 0.06);
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Mulish', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+    background-color: var(--surface-page);
+    padding: 0;
+    color: var(--text-body);
+    position: relative;
+    min-height: 100vh;
+}
+
+.container {
+    width: 100%;
+    margin: 0;
+    background-color: var(--surface-page);
+    padding: 24px;
+    border-radius: 0;
+    box-shadow: none;
+}
+
+.header {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 24px;
+    margin-bottom: 20px;
+}
+
+.header-controls {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 12px;
+    flex-shrink: 0;
+    /* optically centre the controls on the h1's line rather than its box top */
+    padding-top: 6px;
+}
+
+
+.data-source-toggle-external {
+    background-color: transparent;
+    padding: 0;
+    border-radius: 0;
+}
+
+.title-section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.brand-prefix {
+    color: var(--text-subtle);
+    font-weight: 400;
+}
+
+h1 {
+    font-size: 36px;
+    font-weight: 900;
+    color: var(--text-strong);
+    white-space: nowrap;
+}
+
+.subtitle {
+    font-size: 18px;
+    font-weight: 400;
+    color: var(--text-muted);
+}
+
+.mde-input-group {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.mde-label {
+    font-size: 11px;
+    color: var(--text-subtle);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Base input styling */
+.mde-input,
+.search-box,
+.form-input,
+.tab-param-input,
+.tab-param-select {
+    padding: 8px 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 14px;
+    font-family: 'Mulish', sans-serif;
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+.mde-input:focus,
+.search-box:focus,
+.form-input:focus,
+.tab-param-input:focus,
+.tab-param-select:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.mde-input {
+    width: 42px;
+    text-align: center;
+    padding: 8px 4px;
+}
+
+.mde-suffix {
+    font-size: 14px;
+    color: var(--text-subtle);
+}
+
+.search-box {
+    width: 300px;
+    padding: 10px 16px;
+}
+
+.data-source-toggle-external .toggle-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.data-source-toggle-external .toggle-text {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+.data-source-toggle-external .toggle-text:last-of-type {
+    padding: 4px 10px;
+    border-radius: 12px;
+    border: 1px solid transparent;
+    transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.toggle-checkbox {
+    display: none;
+}
+
+.toggle-slider {
+    position: relative;
+    width: 36px;
+    height: 20px;
+    background-color: #ccc;
+    border-radius: 20px;
+    transition: background-color 0.15s;
+}
+
+.toggle-slider::before {
+    content: '';
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background-color: white;
+    top: 3px;
+    left: 3px;
+    transition: transform 0.15s;
+}
+
+.toggle-checkbox:checked + .toggle-slider {
+    background-color: var(--accent);
+}
+
+.toggle-checkbox:checked + .toggle-slider::before {
+    transform: translateX(16px);
+}
+
+.data-source-toggle-external .toggle-checkbox:checked ~ .toggle-text:first-of-type {
+    color: var(--text-faint);
+}
+
+.data-source-toggle-external .toggle-checkbox:checked ~ .toggle-text:last-of-type {
+    color: var(--accent);
+    font-weight: 600;
+}
+
+.data-source-toggle-external .toggle-checkbox:not(:checked) ~ .toggle-text:first-of-type {
+    color: var(--accent);
+    font-weight: 600;
+}
+
+.data-source-toggle-external .toggle-checkbox:not(:checked) ~ .toggle-text:last-of-type {
+    background-color: var(--accent);
+    border-color: var(--accent);
+    color: var(--surface);
+}
+
+/* White throughout, at any width: giving the whole strip this background
+   (rather than only the active .tab) means a wrapped second row of tabs sits
+   on the same white as the first, instead of only the active tab's own box
+   being white while its wrapped neighbours are left on the grey page. The
+   active tab's blue label and underline are what mark the selection now. */
+/* No border of its own: a full-width line here would run under the active tab
+   too and show as a stray rule sitting on top of the white bridge/panel below
+   it. Each inactive tab draws its own baseline instead (see .tab), so the line
+   stops exactly where the active tab's white fill begins. */
+.tabs-container {
+    display: flex;
+    /* Sized to its tabs, not stretched to the page width: with the strip
+       transparent again (only the active tab is white), any leftover space
+       past the last tab would otherwise sit directly above the white bridge
+       and read as a stray grey block with no tab in it. */
+    width: fit-content;
+    max-width: 100%;
+    /* No gap: tabs sit edge to edge, so nothing but each tab's own hover/active
+       fill marks a boundary between them. */
+    gap: 0;
+}
+
+/* Placeholder shown only when the Custom tab is active. Layout, spacing and
+   show/hide all come from .tab-params-panel; only the muted "nothing here
+   yet" tone is specific to it. */
+.custom-panel-placeholder {
+    color: var(--text-faint);
+}
+
+.tab {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 8px;
+    min-height: 104px;
+    padding: 16px 24px;
+    background: none;
+    border: none;
+    /* Tabs sit edge to edge (no gap), so each one rounds its own top corners --
+       otherwise a hover or active fill on one would butt squarely against its
+       neighbour with no visual separation at all. */
+    border-radius: 8px 8px 0 0;
+    /* Reserved strip for the active tab's blue indicator; transparent on an
+       inactive tab, so nothing grey shows there at all. */
+    border-top: 5px solid transparent;
+    cursor: pointer;
+    transition: all 0.1s;
+    color: var(--text-muted);
+    font-family: 'Mulish', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    position: relative;
+    bottom: -1px;
+}
+
+/* Only an inactive tab gets the hover treatment: the active tab is already
+   white and already blue-labelled, so hovering it must not repaint it blue or
+   draw the underline meant to signal "not yet selected, but about to be". */
+.tab:not(.active):hover {
+    background-color: var(--hover-blue);
+    color: var(--text-body);
+    transition: none;
+    border-top-color: var(--accent);
+}
+
+/* Marked on top, not bottom: the tab's bottom edge is flush with the white
+   bridge it shares with the table below, so the blue line sits at the tab's
+   own top edge instead of cutting across that shared join. */
+.tab.active {
+    color: var(--accent);
+    border-top-color: var(--accent);
+}
+
+.tab-icon {
+    width: 40px;
+    height: 40px;
+    object-fit: contain;
+    flex: 0 0 40px;
+}
+
+/* The Rerun tab leads the tab strip: bigger icon, horizontal layout and a
+   divider separating it from the scenario tabs that follow. */
+/* No divider or extra right-hand space: the tab is sized by its own content,
+   like every other tab, rather than carrying a fixed margin/padding/border
+   that reserved room for a separator no longer drawn. */
+.tab[data-tab="rerun"] {
+    font-weight: 800;
+    flex-direction: row;
+    /* Top-align so the icon starts level with the other tabs' icons instead of
+       being vertically centred by the shared .tab rule. */
+    align-items: flex-start;
+    gap: 10px;
+}
+
+.tab[data-tab="rerun"] .tab-icon {
+    width: 62px;
+    height: 62px;
+    flex-basis: 62px;
+}
+
+/* Nudge the label down so it sits optically centred against the taller icon. */
+.tab[data-tab="rerun"] .tab-label {
+    margin-top: 22px;
+}
+
+/* Anchor for a count badge sitting on an icon. Shared by the Rerun tab's icon
+   and the scenario tabs'; both position a badge against their own corner. */
+.rerun-icon-wrap,
+.tab-icon-wrap {
+    position: relative;
+    display: inline-flex;
+    flex: 0 0 auto;
+}
+
+/* Scenario tabs: how many rows the tab's rule currently matches. Amber ties
+   them to the highlighted rows they count; the rerun badge stays blue because
+   it counts a hand-picked list rather than rule matches. */
+/* Shape shared by both count badges; each sets its own size, offsets and
+   colours below. */
+.tab-count-badge,
+.rerun-count-badge {
+    position: absolute;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    line-height: 1;
+    border-radius: 999px;
+}
+
+.tab-count-badge {
+    top: -4px;
+    /* Sit fully outside the 40px icon so the artwork underneath stays readable;
+       .tabs-container keeps enough gap between tabs to absorb the overhang. */
+    right: -18px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 4px;
+    /* Same #fff3cd as the highlighted rows these counts describe. */
+    background-color: var(--highlight-bg);
+    color: var(--highlight-text);
+    font-size: 11px;
+}
+
+/* Scaled against the Rerun tab's larger 62px icon, so it reads at the same
+   visual weight as the 18px badges on the 40px scenario icons. */
+.rerun-count-badge {
+    top: -7px;
+    right: -7px;
+    min-width: 24px;
+    height: 24px;
+    padding: 0 6px;
+    /* Darker than --accent so the badge still reads against the blue rerun
+       icon it sits on, rather than blending into it. */
+    background-color: var(--accent-dark);
+    color: #fff;
+    font-size: 13px;
+    border: 2px solid var(--surface);
+}
+
+.tab-label {
+    text-align: center;
+    line-height: 1.3;
+}
+
+/* The active tab reads as the same surface as the table below it: white,
+   continuing down through .tab-bridge with no seam, so the selected tab
+   visually anchors to the data it controls rather than floating on the grey
+   page background like the others. */
+/* No radius of its own: .tabs-container already rounds its top corners, and
+   since both it and the active tab are the same white, a second, smaller
+   radius on the tab just carves a visible notch where the two curves meet
+   instead of one clean corner. */
+/* Top corners only: this is the top of the white stack that continues through
+   .tab-bridge into .table-container below, so only the very top of that
+   stack should curve -- not this tab's own bottom edge, which butts flush
+   against the bridge beneath it. */
+.tab.active {
+    background-color: var(--surface);
+    border-radius: 8px 8px 0 0;
+}
+
+/* White bridge from the active tab to the table. Always present -- unlike the
+   rule panels it wraps, which show only for tabs with an editable rule -- so a
+   tab with nothing to show (Rerun, Segments, Patterns) still carries the
+   white surface down without a grey gap breaking it. Height comes entirely
+   from its children; empty, it collapses to nothing extra. */
+/* Starts flush after .tabs-container, whatever height that strip ends up at --
+   one row or several once tabs wrap on a narrow screen. No negative margin: an
+   offset tuned for a single tab row would leave a grey gap (or an overlap) the
+   moment the strip wraps to a second row. */
+/* No radius: it is the flat middle of the white stack, flush with the active
+   tab above and the table below, neither of which needs a seam drawn between
+   them. */
+/* Top corners only: the bottom of this box sits flush against .table-container,
+   which continues the same white surface, so only the top -- visible where the
+   bridge is wider than the (no-longer-stretched) tab strip above it -- needs
+   to curve like the rest of the white stack. */
+.tab-bridge {
+    background-color: var(--surface);
+    border-radius: 8px 8px 0 0;
+}
+
+/* Editable highlighting-parameter panel shown under the active tab. */
+.tab-params-panel {
+    display: none;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px 6px;
+    padding: 10px 20px;
+    font-size: 13px;
+    color: var(--text-body);
+}
+
+/* Reserve the height of one .tab-param-input on every rule row, so a tab whose
+   rule has no inputs (Custom) doesn't sit shorter and shift the table up.
+   Derived from the input's own box — 14px text + 6px padding + 1px border,
+   top and bottom — rather than a fixed pixel guess, so the two stay in sync
+   if the input's metrics change. */
+.tab-params-panel::before {
+    content: '';
+    width: 0;
+    align-self: stretch;
+    min-height: calc(14px * 1.2 + (6px + 1px) * 2);
+}
+
+.tab-params-panel.visible {
+    display: flex;
+}
+
+/* The whole rule sentence reads as one blue statement, matching the editable
+   values inside it, rather than muted prose around a few blue numbers. */
+.tab-param-text {
+    color: var(--accent-dark);
+    white-space: nowrap;
+}
+
+.tab-param-field {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 1px;
+}
+
+/* Shares the base input border/focus style (.mde-input etc.); only the size,
+   centering, weight and number-spinner removal are specific to it. */
+.tab-param-input {
+    width: 64px;
+    padding: 6px 8px;
+    color: var(--accent-dark);
+    font-weight: 700;
+    text-align: center;
+    -moz-appearance: textfield;
+}
+
+/* Hide the native number-input spinner arrows */
+.tab-param-input::-webkit-outer-spin-button,
+.tab-param-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.tab-param-suffix {
+    color: var(--accent-dark);
+}
+
+/* The decision dropdown (Shipped / Not Shipped / Either) sits in the rule
+   sentence the same way a numeric threshold does. */
+.tab-param-select {
+    padding: 6px 24px 6px 8px;
+    color: var(--accent-dark);
+    font-weight: 700;
+    font-family: inherit;
+    cursor: pointer;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath fill='%230052a3' d='M1 1l5 5 5-5'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    background-size: 10px 7px;
+}
+
+.table-container {
+    width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    background-color: var(--surface);
+    border: 1px solid var(--panel-border);
+    /* Bottom corners only: the top of this box is flush against .tab-bridge,
+       continuing the same white surface from the active tab above, so only
+       the outer bottom of the whole stack curves. */
+    border-radius: 0 0 8px 8px;
+    box-shadow: var(--panel-shadow);
+    -webkit-overflow-scrolling: touch;
+}
+
+/* The table's own square background otherwise sits on top of the container's
+   curve, squaring off the bottom-left/right corners the container's border-
+   radius is meant to show. Rounding the table to match, and clipping to it,
+   lets that curve actually show at the last row. Horizontal scrolling for
+   wide tables is unaffected: overflow-x on the container still applies. */
+table {
+    border-radius: 0 0 8px 8px;
+    overflow: hidden;
+}
+
+table {
+    width: 100%;
+    min-width: 1400px;
+    table-layout: fixed;
+    border-collapse: collapse;
+    background-color: var(--surface);
+}
+
+thead {
+    background-color: var(--surface);
+}
+
+th {
+    text-align: left;
+    padding: 12px 16px;
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--text-muted);
+    /* Heavier than the row dividers below it, so the header still reads as the
+       strongest horizontal rule in the table. */
+    border-bottom: 2px solid var(--row-divider);
+    white-space: nowrap;
+}
+
+th.sortable {
+    cursor: pointer;
+    user-select: none;
+}
+
+th.sortable:hover {
+    background-color: var(--hover-blue);
+    transition: none;
+}
+
+thead tr:has(th.col-name:hover) th.col-select {
+    background-color: var(--hover-blue);
+}
+
+th.sortable::after {
+    content: '⇅';
+    margin-left: 6px;
+    font-size: 12px;
+    color: var(--text-faint);
+    transition: color 0.1s;
+}
+
+th.sortable.asc,
+th.sortable.desc,
+th.sortable.grouped-asc,
+th.sortable.grouped-desc {
+    color: var(--accent);
+    border-bottom: 2px solid var(--accent);
+}
+
+th.sortable.asc::after {
+    content: '▲';
+    color: var(--accent);
+}
+
+th.sortable.desc::after {
+    content: '▼';
+    color: var(--accent);
+}
+
+th.sortable.grouped-asc::after {
+    content: '▲▲';
+    color: var(--accent);
+    letter-spacing: -4px;
+    margin-right: 10px;
+}
+
+th.sortable.grouped-desc::after {
+    content: '▼▼';
+    color: var(--accent);
+    letter-spacing: -4px;
+    margin-right: 10px;
+}
+
+tbody tr {
+    background-color: var(--surface);
+    transition: transform 0.15s ease;
+}
+
+/* Separator between experiment families (not within parent+sub-rows).
+   A visible rule, not the old page-coloured band: at 1px in --row-divider it
+   reads clearly against white while staying quieter than the cell fills, so
+   structure is legible without competing with the data. */
+tbody tr:not(:first-child):not(.sub-row):not(.rerun-note-row):not(.rerun-tag-row) {
+    border-top: 1px solid var(--row-divider);
+}
+
+/* The tag row and note field belong to the row above them, so nothing may draw
+   a line between them. The family separator already excludes .rerun-note-row in its own
+   selector -- an override here could not win, because :not() chains outrank a
+   single class. These clear the remaining cell-level borders: the selected row's
+   bottom edge, and the within-family hairline that tr.sub-row td would draw
+   across a comparison row's note field. */
+tbody tr.checkbox-selected > td {
+    border-bottom: 0;
+}
+
+tbody tr.rerun-note-row > td,
+tbody tr.rerun-tag-row > td {
+    border-top: 0;
+}
+
+td {
+    padding: 16px;
+    border-bottom: 0;
+}
+
+tbody tr:hover {
+    background-color: var(--hover-blue);
+    transition: none;
+}
+
+.rerun-row-btn {
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    cursor: pointer;
+    opacity: 0.3;
+    transform: scale(0.86);
+    transition: opacity 0.1s, transform 0.1s;
+}
+
+.rerun-row-btn:hover {
+    opacity: 0.7;
+}
+
+.rerun-row-btn.selected {
+    opacity: 1;
+    transform: scale(1);
+}
+
+/* On the Rerun tab the button carries the row's origin icon, which is a plain
+   glyph rather than the rerun badge — give it a little more room. */
+.rerun-row-btn.showing-origin .rerun-row-btn-icon {
+    width: 24px;
+    height: 24px;
+    border-radius: 0;
+}
+
+/* Rows shown on the Rerun tab only as context for a selected sub-row: keep the
+   button reachable but visually quiet next to the coloured origin icons. */
+.rerun-row-btn.context-only {
+    opacity: 0.12;
+}
+
+.rerun-row-btn.context-only:hover {
+    opacity: 0.5;
+}
+
+.rerun-row-btn-icon {
+    width: 22px;
+    height: 22px;
+    object-fit: contain;
+    border-radius: 5px;
+}
+
+tr.checkbox-selected {
+    background-color: var(--hover-blue);
+}
+
+/* Brief pulse when a row is jumped to from the rerun panel's "view" action. */
+tr.row-flash {
+    animation: rowFlash 1.2s ease-out;
+}
+
+@keyframes rowFlash {
+    0%, 40% { background-color: #ffe89a; }
+}
+
+.sample-size,
+.triggered {
+    font-size: 14px;
+    color: var(--text-muted);
+}
+
+.launch-date {
+    font-size: 12px;
+    color: var(--text-subtle);
+    white-space: nowrap;
+}
+
+/* Decision: whether the experiment shipped, as reported by the platform. A
+   small pill rather than plain text -- green for Shipped, muted for anything
+   else -- so it reads at a glance next to the metric columns without
+   competing with their own colour language. */
+.decision-pill {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 11.5px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.decision-shipped {
+    color: var(--success);
+    background-color: rgba(40, 167, 69, 0.12);
+}
+
+.decision-not-shipped {
+    color: var(--text-subtle);
+    background-color: var(--surface-control);
+}
+
+/* Change: what the variation did. Free text, so it is clamped to two lines and
+   the full value lives in the cell's title attribute. */
+td.col-change {
+    padding-right: 12px;
+}
+
+.change-text {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    font-size: 12.5px;
+    line-height: 1.4;
+    color: var(--text-muted);
+}
+
+/* Give the Launched column breathing room on both sides, right-aligned */
+td.col-started,
+th.col-started {
+    padding-left: 20px;
+    padding-right: 20px;
+    text-align: right;
+}
+
+/* Right-align sample size numbers for readability */
+td.col-sample,
+th.col-sample {
+    text-align: right;
+}
+
+/* Power column. The right padding is trimmed so its neighbours (Trigger,
+   Iteration) get more room. */
+td.col-power,
+th.col-power {
+    padding-left: 8px;
+    padding-right: 6px;
+}
+
+.trigger-icons {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.trigger-icon-wrap {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    background-color: var(--surface);
+    border-radius: 5px;
+}
+
+.trigger-icon {
+    width: 16px;
+    height: 16px;
+    object-fit: contain;
+    opacity: 0.86;
+}
+
+/* Immediate custom tooltip on top of the icon (no browser hover delay). */
+.trigger-icon-wrap::after {
+    content: attr(data-tip);
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 4px 8px;
+    background-color: var(--text-strong);
+    color: #fff;
+    font-size: 11px;
+    line-height: 1;
+    white-space: nowrap;
+    border-radius: 4px;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    z-index: 10;
+}
+
+/* Small arrow pointing down to the icon. */
+.trigger-icon-wrap::before {
+    content: "";
+    position: absolute;
+    bottom: calc(100% + 2px);
+    left: 50%;
+    transform: translateX(-50%);
+    border: 4px solid transparent;
+    border-top-color: var(--text-strong);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    z-index: 10;
+}
+
+.trigger-icon-wrap:hover::after,
+.trigger-icon-wrap:hover::before {
+    opacity: 1;
+    visibility: visible;
+}
+
+.iteration-dots {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    flex-wrap: wrap;
+    min-width: 24px;
+    min-height: 24px;
+    padding: 0 8px;
+    background-color: var(--surface);
+    border-radius: 5px;
+}
+
+.iteration-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background-color: var(--signal-fill);
+    display: inline-block;
+}
+
+.cell-empty {
+    font-size: 14px;
+    color: var(--text-subtle);
+}
+
+
+.power-group {
+    display: flex;
+    gap: 3px;
+    align-items: flex-start;
+}
+
+/* Fixed-width micro-columns so the 3 stats stay aligned regardless of digits */
+.power-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1px;
+    width: 46px;
+}
+
+.power-value {
+    font-size: 16px;
+    font-weight: 700;
+}
+
+/* Power value rendered as a colored badge (bg set inline via sensitivityColor()) */
+.power-badge {
+    font-size: 14px;
+    color: var(--surface);
+    background-color: var(--text-faint);
+    border-radius: 4px;
+    padding: 3px 7px;
+    min-width: 40px;
+    text-align: center;
+}
+
+.power-stat-value {
+    font-size: 16px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.power-stat-label {
+    font-size: 11px;
+    color: var(--text-strong);
+    white-space: nowrap;
+}
+
+.traffic-container {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.traffic-bar-wrapper {
+    width: 100%;
+    height: 10px;
+    background-color: var(--surface);
+    border-radius: 5px;
+    padding: 1px;
+    overflow: hidden;
+}
+
+.traffic-bar {
+    height: 100%;
+    background-color: var(--signal-fill);
+    border-radius: 4px 0 0 4px;
+    transition: width 0.2s ease;
+}
+
+.traffic-bar-full {
+    border-radius: 4px;
+}
+
+.traffic-subtitle {
+    font-size: 11px;
+    color: var(--text-subtle);
+}
+
+.owner-link {
+    color: var(--accent);
+    text-decoration: none;
+    font-size: 14px;
+}
+
+.owner-link:hover {
+    text-decoration: underline;
+}
+
+/* Names read as plain text by default — the platform's report is one item in
+   the row's overflow menu, not the name itself. */
+.experiment-name {
+    color: var(--text-body);
+    text-decoration: none;
+    font-weight: 400;
+    font-size: 16px;
+    cursor: default;
+}
+
+/* Tagged for rerun: now it links, to the row's entry in the Rerun list. */
+.experiment-name-link {
+    color: var(--accent);
+    cursor: pointer;
+}
+
+.experiment-name-link:hover {
+    text-decoration: underline;
+}
+
+.experiment-name-link:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 3px;
+}
+
+.experiment-name-container {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+/* The name cell holds the name block plus the Rerun tab's overflow button,
+   which sits at the cell's right edge. */
+tbody td:has(> .experiment-name-container) {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Overflow button: present on every tab at the right edge of the name cell.
+   It opens the row action menu (View Report / rerun actions). */
+.rerun-menu-btn {
+    display: inline-flex;
+    flex: 0 0 auto;
+    margin-left: auto;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    align-items: center;
+    justify-content: center;
+    font-size: 17px;
+    line-height: 1;
+    color: var(--text-muted);
+    background: none;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    cursor: pointer;
+    opacity: 0.5;
+    transition: opacity 0.1s, background-color 0.1s, border-color 0.1s;
+}
+
+.rerun-menu-btn:hover,
+.rerun-menu-btn.menu-open {
+    opacity: 1;
+    background-color: var(--surface);
+    border-color: var(--border);
+}
+
+/* --- Row action menu -------------------------------------------------------
+   Anchored to the overflow button it was opened from. The name cell is the
+   positioning context, so the menu hangs just under the button's right edge. */
+.row-action-menu {
+    position: absolute;
+    top: calc(50% + 16px);
+    right: 8px;
+    z-index: 60;
+    min-width: 200px;
+    padding: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    background-color: var(--surface, #fff);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.14);
+}
+
+/* Anchor for the absolutely positioned menu. */
+tbody td:has(> .experiment-name-container) {
+    position: relative;
+}
+
+.row-action-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 7px 10px;
+    background: none;
+    border: none;
+    border-radius: 6px;
+    font-family: 'Mulish', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-body);
+    text-align: left;
+    text-decoration: none;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.row-action-item:hover {
+    background-color: var(--hover-blue);
+    color: var(--accent);
+}
+
+.row-action-icon {
+    width: 18px;
+    height: 18px;
+    object-fit: contain;
+    flex: 0 0 18px;
+}
+
+/* Kept visible but inert when the row has no report URL, so the menu's shape
+   doesn't change from row to row. */
+.row-action-disabled,
+.row-action-disabled:hover {
+    color: var(--text-faint);
+    background: none;
+    cursor: default;
+}
+
+.row-action-hint {
+    margin-left: auto;
+    font-size: 11px;
+    font-weight: 400;
+    color: var(--text-faint);
+}
+
+/* Keep it lit while its panel is open, so the row shows what's expanded. */
+.experiment-name-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.experiment-id {
+    font-size: 11px;
+    font-weight: 400;
+    color: var(--text-faint);
+    font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+}
+
+.metric-container {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+/* Right-align the primary and secondary metrics */
+td.col-metric .metric-container,
+td.col-secondary .metric-container {
+    align-items: flex-end;
+    text-align: right;
+}
+
+/* Right-align the Secondary metric header to match its cells */
+th.col-secondary {
+    text-align: right;
+}
+
+.metric-label {
+    font-size: 12px;
+    font-weight: 400 !important;
+    color: var(--text-subtle);
+}
+
+.metric-positive,
+.metric-negative {
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.metric-positive {
+    color: var(--success);
+}
+
+.metric-negative {
+    color: var(--danger);
+}
+
+.secondary-metric .metric-positive,
+.secondary-metric .metric-negative {
+    font-size: 16px;
+}
+
+/* Per-signal cell highlight inside a matching row. A soft inset fill marks a cell
+   whose own signal fired (positive effect, low p-value, directionally-consistent
+   secondary, significant secondary p). Drawn on a positioned pseudo-element inset
+   from the cell edges, so it reads as a contained chip on the value and never
+   shifts the numbers. Cool slate reads cleanly against the amber row without
+   competing with the green/red/black values on top. */
+td.signal-on {
+    position: relative;
+}
+
+td.signal-on::before {
+    content: '';
+    position: absolute;
+    inset: 8px 6px;
+    border-radius: 6px;
+    background-color: rgba(120, 100, 78, 0.06);
+    pointer-events: none;
+    z-index: 0;
+}
+
+td.signal-on > * {
+    position: relative;
+    z-index: 1;
+}
+
+/* Group each p-value tightly with the metric to its left */
+td.col-metric,
+th.col-metric,
+td.col-secondary,
+th.col-secondary {
+    padding-right: 12px;
+}
+
+th.col-metric-p,
+th.col-secondary-p,
+.pvalue {
+    padding-left: 4px;
+}
+
+.pvalue {
+    font-size: 12px;
+    font-weight: 400;
+    text-align: center;
+}
+
+.pvalue.pvalue-significant {
+    color: var(--text-strong);
+}
+
+.pvalue.pvalue-not-significant {
+    color: var(--text-faint);
+}
+
+tr.highlighted-row {
+    background-color: var(--highlight-bg);
+}
+
+/* Selection beats the amber scenario highlight: a selected row reads blue
+   whether or not it also matches the active tab's criteria. Declared after
+   .highlighted-row because both selectors carry the same specificity. */
+tr.checkbox-selected,
+tr.highlighted-row.checkbox-selected {
+    background-color: var(--hover-blue);
+}
+
+/* Floating indicator to jump between highlighted rows (single-arrow sort only).
+   Reuses --highlight-bg so it visually matches the highlighted rows. */
+.highlight-nav {
+    position: fixed;
+    left: 20px;
+    bottom: 20px;
+    z-index: 200;
+    display: none;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 8px;
+    background-color: var(--highlight-bg);
+    border: 1px solid #e6d9a8;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    font-size: 12px;
+    color: var(--highlight-text);
+    user-select: none;
+}
+
+.highlight-nav.visible {
+    display: flex;
+}
+
+.highlight-nav-btn {
+    width: 22px;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: 5px;
+    background-color: rgba(0, 0, 0, 0.06);
+    color: var(--highlight-text);
+    cursor: pointer;
+    font-size: 12px;
+    line-height: 1;
+}
+
+.highlight-nav-btn:hover {
+    background-color: rgba(0, 0, 0, 0.14);
+}
+
+.highlight-nav-count {
+    font-weight: 700;
+    min-width: 40px;
+    text-align: center;
+    white-space: nowrap;
+}
+
+/* Brief pulse on the row we just jumped to. The final keyframe is left
+   unset so the animation doesn't pin the row's background once it ends —
+   otherwise it would override the blue selected state. */
+tr.highlight-focus {
+    animation: highlightFocusPulse 1s ease;
+}
+
+@keyframes highlightFocusPulse {
+    0% { background-color: #ffe89a; }
+}
+
+tr.highlighted-row .metric-label,
+tr.highlighted-row .pvalue,
+tr.highlighted-row .sample-size,
+tr.highlighted-row .triggered {
+    color: var(--highlight-text);
+}
+
+tr.highlighted-row:hover {
+    background-color: var(--hover-blue);
+}
+
+/* Sub-rows for multi-variation experiments (A vs C, A vs D) */
+/* Divides a comparison from the row above inside the same family, so it stays
+   lighter than the between-family rule while still being visible. */
+tr.sub-row td {
+    padding-top: 6px;
+    padding-bottom: 6px;
+    border: 0;
+    border-top: 1px solid var(--row-divider-soft);
+}
+
+tr.sub-row td.col-name {
+    padding-left: 16px;
+}
+
+.sub-row-name {
+    color: var(--text-subtle);
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.sub-row-arrow {
+    margin-right: 6px;
+    font-size: 18px;
+}
+
+tr.sub-row.highlighted-row .sub-row-name {
+    color: var(--highlight-text);
+}
+
+.btn {
+    padding: 10px 24px;
+    border-radius: 4px;
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    transition: all 0.1s;
+    font-family: 'Mulish', sans-serif;
+}
+
+.btn-primary {
+    background-color: var(--accent);
+    color: var(--surface);
+}
+
+.btn-primary:hover {
+    background-color: var(--accent-dark);
+    transition: none;
+}
+
+/* Modal Styles */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 2000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+}
+
+.modal.show {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-content {
+    background-color: var(--surface);
+    padding: 32px;
+    border-radius: 8px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+    width: 90%;
+    max-width: 500px;
+}
+
+.modal-content h2 {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--text-strong);
+    margin-bottom: 24px;
+}
+
+.modal-subtitle {
+    display: block;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin-top: 2px;
+}
+
+.modal-body {
+    margin-bottom: 24px;
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group label {
+    display: block;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+}
+
+.csv-file-label {
+    margin-top: 10px;
+}
+
+.form-input {
+    width: 100%;
+}
+
+.form-input:focus {
+    box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.1);
+}
+
+.form-input[type="password"] {
+    letter-spacing: 0.1em;
+}
+
+.radio-group {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.radio-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    padding: 8px;
+    border: none;
+    border-radius: 4px;
+    transition: all 0.1s;
+}
+
+.radio-option:hover {
+    background-color: var(--surface-soft);
+    transition: none;
+}
+
+.radio-input {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+    accent-color: var(--accent);
+    margin: 0;
+    flex-shrink: 0;
+    vertical-align: middle;
+}
+
+.radio-label {
+    font-size: 14px;
+    color: var(--text-body);
+    font-weight: 500;
+    line-height: 1;
+    padding-top: 1px;
+}
+
+.radio-option:has(.radio-input:checked) {
+    background-color: var(--hover-blue);
+}
+
+.platform-status {
+    margin-left: auto;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 10px;
+    line-height: 1.5;
+    white-space: nowrap;
+}
+
+.platform-status-live {
+    color: var(--success);
+    background-color: rgba(40, 167, 69, 0.12);
+}
+
+.platform-status-soon {
+    color: var(--text-muted);
+    background-color: var(--surface-soft);
+}
+
+.platform-help-note {
+    margin-top: 10px;
+    padding: 10px 12px;
+    border-radius: 6px;
+    background-color: var(--hover-blue);
+    color: var(--text-strong);
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.platform-help-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text-strong);
+    margin-bottom: 4px;
+}
+
+.platform-help-note a {
+    color: var(--accent);
+    font-weight: 600;
+    text-decoration: underline;
+}
+
+.platform-help-note a:hover {
+    color: var(--accent-dark);
+}
+
+.platform-help-cta {
+    font-size: 15px;
+    display: inline-block;
+    margin-top: 2px;
+}
+
+.file-protocol-notice {
+    min-height: 220px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 24px;
+    background-color: var(--surface-soft);
+    border-radius: 8px;
+    margin-top: 16px;
+}
+
+.file-protocol-notice-inner {
+    max-width: 720px;
+    margin-left: 48px;
+}
+
+.file-protocol-notice strong {
+    display: block;
+    color: var(--text-muted);
+    font-size: 19px;
+    margin-bottom: 12px;
+    text-align: left;
+}
+
+.file-protocol-notice p {
+    color: var(--text-muted);
+    font-size: 16px;
+    line-height: 1.7;
+    margin: 0;
+    text-align: left;
+}
+
+.file-protocol-notice code {
+    background-color: var(--surface);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 15px;
+}
+
+.modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+}
+
+/* The notes field carried by every row on the rerun list, on any tab. */
+/* Tag row: real table cells, so each group sits under the column it acts on --
+   Change under Change, Power under Power, Trigger under Trigger. Toggles are
+   dark blue when on, grey when off, and several can be on at once. */
+.rerun-tag-row > td {
+    /* Bottom padding separates the toggles from the notes field below them,
+       which sits flush to the top of its own row. */
+    padding: 6px 8px 10px;
+    background-color: var(--hover-blue);
+    border: 0;
+}
+
+.rerun-tag-cell {
+    white-space: nowrap;
+}
+
+.rerun-tag-cell .rerun-tag + .rerun-tag {
+    margin-left: 4px;
+}
+
+/* Line up with the indented comparison row above. */
+.rerun-tag-row.sub-row-tags > td:first-child {
+    padding-left: 24px;
+}
+
+.rerun-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 8px;
+    font-family: inherit;
+    font-size: 11.5px;
+    font-weight: 500;
+    color: var(--text-muted);
+    background-color: var(--field-tint);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    cursor: pointer;
+    transition: background-color 0.1s, border-color 0.1s, color 0.1s;
+}
+
+.rerun-tag:hover {
+    border-color: var(--text-subtle);
+    color: var(--text-body);
+}
+
+/* Placeholder glyph until real icons land. */
+.rerun-tag-icon {
+    width: 12px;
+    height: 12px;
+    flex: 0 0 12px;
+    border-radius: 3px;
+    background-color: currentColor;
+    opacity: 0.45;
+}
+
+/* Selected state, shared by the tag toggles and the type dropdown: anything
+   the user has decided fills dark blue, so the two controls read as one
+   system. ("Same as original" means nothing was decided, and stays plain.) */
+.rerun-tag.is-selected,
+.rerun-type-select.is-set {
+    color: #fff;
+    background-color: var(--accent-dark);
+    border-color: var(--accent-dark);
+}
+
+.rerun-tag.is-selected:hover,
+.rerun-type-select.is-set:hover {
+    color: #fff;
+    border-color: var(--accent-dark);
+}
+
+.rerun-tag.is-selected .rerun-tag-icon {
+    opacity: 1;
+}
+
+.rerun-tag:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+}
+
+/* Notes and the type picker share one row: the field takes the space that is
+   left, the picker keeps its natural width at the right end. */
+.rerun-note-layout {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    /* Indented to clear the row icon, so it lines up under the name. */
+    margin: 0 16px 12px 52px;
+}
+
+.rerun-note-field {
+    display: block;
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 720px;
+    box-sizing: border-box;
+    padding: 10px 12px;
+    font-family: inherit;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--text-strong);
+    /* Translucent white over the row's blue: the field stays legible for typing
+       without cutting a hard white rectangle out of the block. No border -- the
+       tint alone marks the field, so nothing draws a line across the row. */
+    background-color: var(--field-tint);
+    border: 1px solid transparent;
+    border-radius: 8px;
+    /* The field grows to fit its text (autoGrowNotesField), so it never needs to
+       scroll and never needs a drag handle. */
+    resize: none;
+    overflow: hidden;
+    min-height: 60px;
+}
+
+.rerun-note-row.sub-row-note .rerun-note-layout {
+    margin-left: 76px;
+}
+
+/* Selecting a row focuses its field straight away, so the focus state has to be
+   quiet: the fill going from tinted to solid white is the whole signal, with no
+   border or ring drawn around it. */
+/* Rerun structure picker, at the right end of the notes block. A native
+   <select> carries the choice, its description sits beneath, and the A/B/C
+   diagram for the chosen type sits to the right of both. */
+/* The select and its diagram share one row, with the description beneath both.
+   Putting them in the same row is what keeps the circles on the select's
+   centreline -- no height needs to be copied or guessed. */
+.rerun-type-picker {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    flex: 0 0 auto;
+}
+
+/* Label, dropdown and diagram on one line, vertically centred together. */
+.rerun-type-select-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Sits on its own line above the control. */
+.rerun-type-label {
+    display: block;
+    margin-bottom: 3px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: var(--text-subtle);
+    white-space: nowrap;
+}
+
+/* Blank until a type is chosen, so it must not reserve a line of its own. */
+.rerun-type-description {
+    font-size: 11px;
+    line-height: 1.3;
+    color: var(--text-subtle);
+}
+
+.rerun-type-description:empty {
+    display: none;
+}
+
+.rerun-type-select {
+    padding: 5px 10px;
+    font-family: inherit;
+    font-size: 12px;
+    color: var(--text-body);
+    background-color: var(--field-tint);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    cursor: pointer;
+    max-width: 320px;
+}
+
+.rerun-type-select:hover {
+    border-color: var(--text-subtle);
+}
+
+/* The dropdown list itself stays readable: only the closed control is filled. */
+.rerun-type-select.is-set option {
+    color: var(--text-body);
+    background-color: var(--surface);
+}
+
+.rerun-type-select:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.rerun-type-variants {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+}
+
+/* Sits on the select's centreline. Rather than copy the select's height (which
+   would drift if its padding or font changed), the preview stretches to the
+   controls column and its contents are pushed to the top -- the select is the
+   first thing in that column, so the circles land beside it. */
+.rerun-type-preview {
+    display: inline-flex;
+    align-items: center;
+}
+
+/* One arm of the test. Circles echo the reference: a plain outline for a normal
+   variant, faded for a low-powered one, filled for an emphasised one. */
+/* One arm of the test. Circles echo the reference: a plain outline for a normal
+   variant, faded for a low-powered one, filled for an emphasised one. */
+.rerun-type-variant {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 4px;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--text-body);
+    border: 1.5px solid var(--text-body);
+    border-radius: 999px;
+}
+
+.rerun-type-variant.is-muted {
+    color: var(--text-faint);
+    border-color: var(--text-faint);
+    border-width: 1px;
+}
+
+/* An emphasised arm: the only one that inverts, so it stands out on its own. */
+.rerun-type-variant.is-strong {
+    min-width: 24px;
+    height: 24px;
+    font-size: 11px;
+    color: #fff;
+    background-color: var(--text-body);
+}
+
+.rerun-type-split {
+    margin: 0 2px;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-subtle);
+}
+
+.rerun-note-field:focus {
+    outline: none;
+    background-color: var(--surface);
+    border-color: transparent;
+    box-shadow: none;
+}
+
+.rerun-note-field::placeholder {
+    color: var(--text-muted);
+}
+
+/* Read-only change-note strip under a Rerun-tab row: a full-width band that
+   states what you meant to change, without opening the panel. */
+/* Belongs to the row above it: same blue, no rule between them, so a listed
+   experiment and its notes read as one block. */
+.rerun-note-row > td {
+    padding: 0;
+    background-color: var(--hover-blue);
+    border-bottom: 0;
+}
+
+tbody tr.rerun-note-row:hover > td {
+    background-color: var(--hover-blue);
+}
+
+
+.btn-secondary {
+    background-color: var(--surface-control);
+    color: var(--text-muted);
+}
+
+.btn-secondary:hover {
+    background-color: var(--border);
+    transition: none;
+}
+
+/* ===== Experiment Summary Bar ===== */
+.summary-bar {
+    display: flex;
+    align-items: stretch;
+    background-color: var(--surface);
+    border: 1px solid var(--panel-border);
+    border-radius: 8px;
+    box-shadow: var(--panel-shadow);
+    padding: 10px 18px;
+    margin-bottom: 16px;
+}
+
+.summary-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 0 8px;
+}
+
+.summary-panel:first-child {
+    padding-left: 0;
+}
+
+.summary-panel:last-child {
+    padding-right: 0;
+}
+
+.summary-panel-sensitivity {
+    flex: 2;
+    align-items: center;
+    text-align: center;
+    gap: 2px;
+}
+
+.summary-panel-success,
+.summary-panel-fpr {
+    flex: 0.25 1 auto;
+    align-items: center;
+    text-align: center;
+}
+
+.summary-panel-header {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.summary-panel-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-muted);
+}
+
+.summary-panel-subtitle {
+    font-size: 11px;
+    font-weight: 400;
+    color: #aaa;
+}
+
+.summary-divider {
+    width: 1px;
+    background-color: var(--border);
+    align-self: stretch;
+    flex: 0 0 1px;
+    transform: scaleX(0.5);
+    transform-origin: center;
+}
+
+.summary-sensitivity-thresholds {
+    display: flex;
+    align-items: flex-end;
+    gap: 10px;
+}
+
+.summary-threshold-column {
+    width: 40px;
+    flex-shrink: 0;
+    display: grid;
+    grid-template-rows: 56px 16px;
+    align-items: end;
+    justify-items: center;
+}
+
+.summary-threshold-pct {
+    width: 100%;
+    text-align: center;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-strong);
+    margin-bottom: 2px;
+}
+
+/* Bottom-anchored bar area: number stacks directly on top of the bar and
+   rides up/down with it, so it always hugs where the bar ends. */
+.summary-threshold-bararea {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    width: 100%;
+    height: 56px;
+}
+
+.summary-threshold-bar {
+    width: 100%;
+    border-radius: 3px;
+    background-color: #999;
+    transition: height 0.2s ease;
+}
+
+.summary-threshold-label {
+    width: 100%;
+    text-align: center;
+    font-size: 11px;
+    color: var(--text-strong);
+    font-weight: 500;
+}
+
+.summary-threshold-column.sensitivity-selected {
+    font-weight: 700;
+}
+
+.summary-metric-value {
+    font-size: 24px;
+    font-weight: 800;
+    color: var(--text-strong);
+}
+
+.summary-metric-value.metric-good,
+.summary-metric-median-value.metric-good {
+    color: var(--success);
+}
+
+.summary-metric-value.metric-warning,
+.summary-metric-median-value.metric-warning {
+    color: var(--warning);
+}
+
+.summary-metric-value.metric-danger,
+.summary-metric-median-value.metric-danger {
+    color: var(--danger);
+}
+
+/* Median effect shown as a small sub-line under each success rate */
+.summary-metric-median {
+    font-size: 12px;
+    font-weight: 500;
+    color: #aaa;
+    margin-top: 2px;
+}
+
+.summary-metric-median-value {
+    font-weight: 700;
+    color: var(--text-strong);
+}
+
+@media (max-width: 1440px) {
+    .container {
+        padding: 20px;
+    }
+
+    .header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 16px;
+    }
+
+    .header-controls {
+        justify-content: flex-end;
+        gap: 10px 14px;
+        order: -1;
+        padding-top: 0;
+    }
+
+    .search-box {
+        flex: 1 1 320px;
+        width: auto;
+        max-width: 460px;
+    }
+
+    .data-source-toggle-external {
+        margin-left: 0;
+    }
+
+    .summary-bar {
+        padding: 12px 16px;
+    }
+
+    .summary-panel {
+        padding: 0 10px;
+    }
+
+    .summary-panel-title {
+        font-size: 13px;
+    }
+
+    .summary-panel-subtitle {
+        font-size: 10px;
+    }
+
+    .summary-sensitivity-thresholds {
+        gap: 8px;
+    }
+
+    .summary-threshold-column {
+        width: 36px;
+    }
+
+    .tabs-container {
+        flex-wrap: wrap;
+        overflow: visible;
+        gap: 4px;
+        /* No bottom margin here either -- see the base rule. */
+    }
+
+    .tab {
+        flex: 1 1 120px;
+        min-width: 112px;
+        padding: 14px 12px;
+        font-size: 13px;
+    }
+
+    .tab-icon {
+        width: 34px;
+        height: 34px;
+        flex-basis: 34px;
+    }
+
+    /* Tabs wrap into rows here, so the leading divider would land mid-strip. */
+    .tab[data-tab="rerun"] .tab-icon {
+        width: 44px;
+        height: 44px;
+        flex-basis: 44px;
+    }
+}
+
+@media (max-width: 1040px) {
+    .container {
+        padding: 24px 20px;
+    }
+
+    h1 {
+        font-size: 32px;
+    }
+
+    .subtitle {
+        font-size: 16px;
+    }
+
+    .search-box {
+        min-width: 240px;
+        max-width: none;
+    }
+
+    .summary-bar {
+        flex-wrap: nowrap;
+        padding: 10px 12px;
+    }
+
+    .summary-divider {
+        display: block;
+    }
+
+    .summary-panel-success,
+    .summary-panel-fpr {
+        flex: 1 1 0;
+        min-width: 0;
+    }
+
+    .summary-panel-sensitivity {
+        flex: 1.8 1 0;
+        min-width: 0;
+        order: 0;
+    }
+
+    .summary-panel {
+        padding: 0 6px;
+    }
+
+    .summary-sensitivity-thresholds {
+        gap: 6px;
+    }
+
+    .summary-threshold-column {
+        width: 32px;
+    }
+
+    .summary-metric-value {
+        font-size: 22px;
+    }
+
+    .summary-metric-median {
+        font-size: 11px;
+    }
+}
+
+@media (max-width: 720px) {
+    .container {
+        padding: 20px 16px;
+    }
+
+    h1 {
+        font-size: 28px;
+    }
+
+    .header-controls {
+        align-items: flex-start;
+    }
+
+    .search-box {
+        flex-basis: 100%;
+        min-width: 0;
+    }
+
+    .data-source-toggle-external {
+        margin-left: 0;
+    }
+
+    .summary-bar {
+        flex-wrap: wrap;
+    }
+
+    .summary-divider {
+        display: none;
+    }
+
+    .summary-panel-success,
+    .summary-panel-fpr,
+    .summary-panel-sensitivity {
+        flex-basis: 100%;
+    }
+
+    .summary-sensitivity-thresholds {
+        max-width: 100%;
+        overflow-x: auto;
+    }
+
+    .tab {
+        flex-basis: 112px;
+        padding: 12px 10px;
+    }
+
+    .tab[data-tab="rerun"] .tab-icon {
+        width: 26px;
+        height: 26px;
+        flex-basis: 26px;
+    }
+
+    /* Let the long placeholder sentence wrap on narrow screens instead of
+       forcing the panel to overflow. */
+    .custom-panel-placeholder {
+        white-space: normal;
+    }
+}
+
+/* ---- Pagination ------------------------------------------------------- */
+/* Only rendered when the result set exceeds one page; the table itself holds
+   a fixed number of rows regardless of how large the dataset is. */
+/* The highlight navigator is position:fixed at the bottom-left, so it floats
+   over whatever the page ends with. Reserve a lane for it: the controls keep
+   clear on the left, and the page keeps tail room so the last row of content
+   can always be scrolled out from under it. */
+.pagination-controls {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 16px;
+    flex-wrap: wrap;
+    padding: 12px 4px 0 150px;
+    margin-bottom: 72px;
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+/* Controls sit left of the count, which anchors to the right edge. */
+.pagination-controls .pagination-buttons {
+    order: 1;
+}
+
+.pagination-controls .pagination-status {
+    order: 2;
+}
+
+@media (max-width: 700px) {
+    /* Too narrow for a side lane -- stack instead and clear the floater below. */
+    .pagination-controls {
+        justify-content: space-between;
+        padding-left: 4px;
+        margin-bottom: 84px;
+    }
+
+    /* Reading order when stacked: count first, then the controls. */
+    .pagination-controls .pagination-status {
+        order: 0;
+    }
+
+    .pagination-controls .pagination-buttons {
+        order: 1;
+    }
+}
+
+.pagination-status {
+    color: var(--text-subtle);
+}
+
+.pagination-buttons {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.pagination-page {
+    color: var(--text-muted);
+    min-width: 110px;
+    text-align: center;
+}
+
+.pagination-btn {
+    padding: 6px 14px;
+    font-size: 12px;
+    font-family: inherit;
+    color: var(--text-body);
+    background-color: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    cursor: pointer;
+    transition: background-color 0.1s, border-color 0.1s;
+}
+
+.pagination-btn:hover:not(:disabled) {
+    background-color: var(--surface-control);
+    border-color: var(--text-muted);
+}
+
+.pagination-btn:disabled {
+    color: var(--text-faint);
+    cursor: default;
+    opacity: 0.6;
+}
+
+.pagination-size {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-subtle);
+}
+
+.pagination-select {
+    padding: 5px 8px;
+    font-size: 12px;
+    font-family: inherit;
+    color: var(--text-body);
+    background-color: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    cursor: pointer;
+}
+
+.pagination-select:hover {
+    border-color: var(--text-muted);
+}

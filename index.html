@@ -1,0 +1,3456 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rerun - Experiments Dashboard</title>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <link rel="stylesheet" href="styles.css?v=20260902">
+    <script src="config.js"></script>
+    <script src="stats-utils.js"></script>
+    <script src="mappers/mapper-utils.js"></script>
+    <script src="mappers/growthbook-mapper.js"></script>
+    <script src="mappers/convert-mapper.js"></script>
+    <script src="mappers/eppo-mapper.js"></script>
+    <script src="mappers/absmartly-mapper.js"></script>
+    <script src="mappers/convert-csv-mapper.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="title-section">
+                <h1><span class="brand-prefix">Rerun:</span> <span class="scenario-title">Your "Almost" Significant Tests</span></h1>
+                <p class="subtitle">Likely worth replicating and running with more power.</p>
+            </div>
+            <div class="header-controls">
+                <div class="mde-input-group">
+                    <label for="mdeInput" class="mde-label">MDE</label>
+                    <input type="text" id="mdeInput" class="mde-input" value="2" inputmode="decimal" pattern="[0-9]*\.?[0-9]*">
+                    <span class="mde-suffix">%</span>
+                </div>
+                <input
+                    type="search"
+                    class="search-box"
+                    name="rerun-dashboard-filter"
+                    placeholder="Search"
+                    aria-label="Search experiments"
+                    autocomplete="new-password"
+                    autocorrect="off"
+                    autocapitalize="off"
+                    spellcheck="false"
+                    data-lpignore="true"
+                    data-1p-ignore="true"
+                    data-bwignore="true"
+                    readonly>
+                <div class="data-source-toggle-external">
+                    <label class="toggle-label">
+                        <span class="toggle-text">Dummy Data</span>
+                        <input type="checkbox" id="dataSourceToggle" class="toggle-checkbox">
+                        <span class="toggle-slider"></span>
+                        <span class="toggle-text">Import</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <!-- API Configuration Modal -->
+        <div id="apiConfigModal" class="modal">
+            <div class="modal-content">
+                <h2>Configure API Connection<span class="modal-subtitle">to Find Real Rerun Candidates</span></h2>
+                <form id="apiConfigForm" autocomplete="off" onsubmit="return false;">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label>Platform</label>
+                        <div class="radio-group">
+                            <label class="radio-option">
+                                <input type="radio" name="platform" value="growthbook" class="radio-input">
+                                <span class="radio-label">GrowthBook</span>
+                                <span class="platform-status platform-status-live">Connected</span>
+                            </label>
+                            <label class="radio-option">
+                                <input type="radio" name="platform" value="csv" class="radio-input">
+                                <span class="radio-label">Convert CSV</span>
+                                <span class="platform-status platform-status-live">Connected</span>
+                            </label>
+                            <label class="radio-option">
+                                <input type="radio" name="platform" value="convert" class="radio-input">
+                                <span class="radio-label">Convert</span>
+                                <span class="platform-status platform-status-soon">Coming soon</span>
+                            </label>
+                            <label class="radio-option">
+                                <input type="radio" name="platform" value="eppo" class="radio-input">
+                                <span class="radio-label">Eppo</span>
+                                <span class="platform-status platform-status-soon">Coming soon</span>
+                            </label>
+                            <label class="radio-option">
+                                <input type="radio" name="platform" value="absmartly" class="radio-input">
+                                <span class="radio-label">ABsmartly</span>
+                                <span class="platform-status platform-status-soon">Coming soon</span>
+                            </label>
+                            <label class="radio-option">
+                                <input type="radio" name="platform" value="amplitude" class="radio-input">
+                                <span class="radio-label">Amplitude</span>
+                                <span class="platform-status platform-status-soon">Coming soon</span>
+                            </label>
+                        </div>
+                        <div class="platform-help-note">
+                            <div class="platform-help-title">Need a Custom Integration and Setup?</div>
+                            Only GrowthBook and Convert CSV import real data right now. Jakub is happy to wire up any of these (or another platform entirely).<br>&rarr; <a href="https://linowski.ca" target="_blank" rel="noopener" class="platform-help-cta">Contact me at Linowski.ca</a>
+                        </div>
+                    </div>
+                    <div class="form-group" id="apiKeyGroup">
+                        <label for="apiKeyInput">Read-only API Key</label>
+                        <input
+                            type="password"
+                            id="apiKeyInput"
+                            class="form-input"
+                            placeholder="Enter your API key"
+                            autocomplete="new-password"
+                            data-lpignore="true"
+                            data-1p-ignore="true"
+                            data-bwignore="true">
+                    </div>
+                    <div class="form-group" id="csvFileGroup" style="display: none;">
+                        <label for="csvAccountId">Account ID</label>
+                        <input type="text" id="csvAccountId" class="form-input" placeholder="e.g., 10000001">
+                        <label for="csvFileInput" class="csv-file-label">Select CSV File</label>
+                        <input type="file" id="csvFileInput" class="form-input" accept=".csv">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" id="cancelBtn" class="btn btn-secondary">Cancel</button>
+                    <button type="button" id="okBtn" class="btn btn-primary">OK</button>
+                </div>
+                </form>
+            </div>
+        </div>
+
+        <div id="summaryBar" class="summary-bar">
+            <div class="summary-panel summary-panel-success">
+                <div class="summary-panel-header">
+                    <span class="summary-panel-title">Success Rate of <wbr>First Time Tests</span>
+                    <span class="summary-panel-subtitle">Sig. positive results among first-time tests</span>
+                </div>
+                <div class="summary-metric-value" id="successRateValue"></div>
+                <div class="summary-metric-median">median impact <span id="medianEffectValue"></span></div>
+            </div>
+            <div class="summary-divider"></div>
+            <div class="summary-panel summary-panel-success">
+                <div class="summary-panel-header">
+                    <span class="summary-panel-title">Success Rate of <wbr>Iterations</span>
+                    <span class="summary-panel-subtitle">Sig. positive results among iterated tests</span>
+                </div>
+                <div class="summary-metric-value" id="successRateIterValue"></div>
+                <div class="summary-metric-median">median impact <span id="medianEffectIterValue"></span></div>
+            </div>
+            <div class="summary-divider"></div>
+            <div class="summary-panel summary-panel-sensitivity">
+                <div class="summary-panel-header">
+                    <span class="summary-panel-title">Testing Sensitivity</span>
+                    <span class="summary-panel-subtitle">% of experiments with &ge;80% power / per MDE</span>
+                </div>
+                <div class="summary-sensitivity-thresholds" id="sensitivityThresholds"></div>
+            </div>
+            <div class="summary-divider"></div>
+            <div class="summary-panel summary-panel-fpr">
+                <div class="summary-panel-header">
+                    <span class="summary-panel-title">False Positive Risk</span>
+                    <span class="summary-panel-subtitle">Probability that a sig. result is a false positive</span>
+                </div>
+                <div class="summary-metric-value" id="fprValue"></div>
+            </div>
+        </div>
+
+        <div class="tabs-container">
+            <button class="tab" data-tab="rerun">
+                <span class="rerun-icon-wrap">
+                    <img src="images/iconRerun.svg" data-default="images/iconRerun.svg" data-selected="images/iconRerun_Sel.svg" alt="Rerun" class="tab-icon">
+                    <span id="rerunTabCount" class="rerun-count-badge" style="display: none;">0</span>
+                </span>
+                <span class="tab-label">Rerun</span>
+            </button>
+            <button class="tab active" data-tab="almost-significant">
+                <span class="tab-icon-wrap">
+                    <img src="images/iconAlmostSig.png" data-default="images/iconAlmostSig.png" data-selected="images/iconAlmostSig_Sel.png" alt="Almost Significant" class="tab-icon">
+                    <span class="tab-count-badge" data-count-for="almost-significant" style="display: none;">0</span>
+                </span>
+                <span class="tab-label">Almost Significant</span>
+            </button>
+            <button class="tab" data-tab="lemon">
+                <span class="tab-icon-wrap">
+                    <img src="images/iconLemon.png" data-default="images/iconLemon.png" data-selected="images/iconLemon_Sel.png" alt="Squeeze The Lemon" class="tab-icon">
+                    <span class="tab-count-badge" data-count-for="lemon" style="display: none;">0</span>
+                </span>
+                <span class="tab-label">Squeeze The Lemon</span>
+            </button>
+            <button class="tab" data-tab="big-losers">
+                <span class="tab-icon-wrap">
+                    <img src="images/iconNeg.png" data-default="images/iconNeg.png" data-selected="images/iconNeg_Sel.png" alt="Promising Losers" class="tab-icon">
+                    <span class="tab-count-badge" data-count-for="big-losers" style="display: none;">0</span>
+                </span>
+                <span class="tab-label">Promising Losers</span>
+            </button>
+            <button class="tab" data-tab="false-pos">
+                <span class="tab-icon-wrap">
+                    <img src="images/iconFalsePos.png" data-default="images/iconFalsePos.png" data-selected="images/iconFalsePos_Sel.png" alt="Too Good To Be True" class="tab-icon">
+                    <span class="tab-count-badge" data-count-for="false-pos" style="display: none;">0</span>
+                </span>
+                <span class="tab-label">Too Good To Be True</span>
+            </button>
+            <button class="tab" data-tab="false-neg">
+                <span class="tab-icon-wrap">
+                    <img src="images/iconFalseNeg.png" data-default="images/iconFalseNeg.png" data-selected="images/iconFalseNeg_Sel.png" alt="Too Good To Be False" class="tab-icon">
+                    <span class="tab-count-badge" data-count-for="false-neg" style="display: none;">0</span>
+                </span>
+                <span class="tab-label">Too Good To Be False</span>
+            </button>
+            <button class="tab" data-tab="segments">
+                <span class="tab-icon-wrap">
+                    <img src="images/iconSupriseSegment.png" data-default="images/iconSupriseSegment.png" data-selected="images/iconSupriseSegment_Sel.png" alt="Interesting Segments" class="tab-icon">
+                    <span class="tab-count-badge" data-count-for="segments" style="display: none;">0</span>
+                </span>
+                <span class="tab-label">Interesting Segments</span>
+            </button>
+            <button class="tab" data-tab="patterns">
+                <span class="tab-icon-wrap">
+                    <img src="images/iconPatterns.png" data-default="images/iconPatterns.png" data-selected="images/iconPatterns_Sel.png" alt="Find Patterns" class="tab-icon">
+                    <span class="tab-count-badge" data-count-for="patterns" style="display: none;">0</span>
+                </span>
+                <span class="tab-label">Find Patterns</span>
+            </button>
+            <button class="tab" data-tab="custom">
+                <span class="tab-icon-wrap">
+                    <img src="images/iconCustom.png" data-default="images/iconCustom.png" data-selected="images/iconCustom_Sel.png" alt="Custom" class="tab-icon">
+                    <span class="tab-count-badge" data-count-for="custom" style="display: none;">0</span>
+                </span>
+                <span class="tab-label">Custom</span>
+            </button>
+        </div>
+
+        <!-- White bridge from the active tab down to the table: always present
+             regardless of whether either rule panel inside it has content, so the
+             active tab's white fill continues without a grey seam on tabs (Rerun,
+             Segments, Patterns) that have no editable rule. -->
+        <div class="tab-bridge">
+            <!-- Editable highlighting parameters for the active tab. Populated by
+                 renderTabParamsPanel(); hidden for tabs with no editable rule. -->
+            <div id="tabParamsPanel" class="tab-params-panel"></div>
+
+            <!-- Custom tab's placeholder rule row. Shares .tab-params-panel so it
+                 lines up with the editable rule rows on the other tabs. -->
+            <div id="customPanel" class="tab-params-panel">
+                <span class="tab-param-text custom-panel-placeholder">Placeholder to add custom rules in the future</span>
+            </div>
+        </div>
+
+        <div id="highlightNav" class="highlight-nav" title="Jump between highlighted rows (↑ / ↓)">
+            <button id="highlightPrev" class="highlight-nav-btn" aria-label="Previous highlight">&#9650;</button>
+            <span id="highlightCount" class="highlight-nav-count">0 / 0</span>
+            <button id="highlightNext" class="highlight-nav-btn" aria-label="Next highlight">&#9660;</button>
+        </div>
+
+        <div class="table-container">
+            <table>
+                <colgroup>
+                    <col style="width: 40px;">
+                    <col style="width: 13%;">
+                    <col style="width: 7%;">
+                    <!-- Decision: whether the experiment shipped. Sized for the
+                         longer of the two values, "Not Shipped". -->
+                    <col style="width: 7%;">
+                    <!-- Change: what the variation actually did. Widths here are
+                         set by the header labels, which do not wrap: the two
+                         metric columns need ~10% to fit "Primary metric" and
+                         "Secondary metric" plus their sort arrows. -->
+                    <col style="width: 7%;">
+                    <col style="width: 10%;">
+                    <col style="width: 5%;">
+                    <col style="width: 10%;">
+                    <col style="width: 5%;">
+                    <col style="width: 8%;">
+                    <col style="width: 156px;">
+                    <col style="width: 7%;">
+                    <col style="width: 6%;">
+                    <col style="width: 7%;">
+                    <col style="width: 6%;">
+                </colgroup>
+                <thead>
+                    <tr>
+                        <th class="col-select"></th>
+                        <th class="sortable col-name" data-column="name" data-type="string">Experiment Name</th>
+                        <th class="sortable col-started" data-column="date" data-type="string">Started</th>
+                        <th class="sortable col-decision" data-column="decision" data-type="string">Decision</th>
+                        <th class="sortable col-change" data-column="change" data-type="string">Change</th>
+                        <th class="sortable col-metric" data-column="metric" data-type="number">Metric</th>
+                        <th class="sortable col-metric-p" data-column="pvalue" data-type="number">P-val</th>
+                        <th class="sortable col-secondary" data-column="secondary" data-type="string">Sec. Metric</th>
+                        <th class="sortable col-secondary-p" data-column="secondaryPvalue" data-type="number">P-val</th>
+                        <th class="sortable col-sample" data-column="sample" data-type="number">Sample size</th>
+                        <th class="sortable col-power" data-column="power" data-type="number">Power</th>
+                        <th class="sortable col-trigger" data-column="triggered" data-type="string">Trigger</th>
+                        <th class="sortable col-reach" data-column="traffic" data-type="number">Reach</th>
+                        <th class="sortable col-iteration" data-column="iteration" data-type="number">Iteration</th>
+                        <th class="sortable col-owner" data-column="owner" data-type="string">Owner</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody">
+                    <!-- Table rows will be dynamically generated from data.json -->
+                </tbody>
+            </table>
+        </div>
+
+        <div id="fileProtocolNotice" class="file-protocol-notice" style="display: none;">
+            <div class="file-protocol-notice-inner">
+                <strong>Serve this folder over HTTP to load experiment data.</strong>
+                <p>
+                    Opening this page straight from disk (<code>file://</code>) blocks the
+                    data request. Start a local server from this folder instead &mdash;
+                    for example <code>npx serve</code>, Python's
+                    <code>python -m http.server</code>, or VS Code's "Live Server"
+                    extension &mdash; then open the <code>localhost</code> URL it prints.
+                </p>
+            </div>
+        </div>
+        <div id="paginationControls" class="pagination-controls" style="display: none;"></div>
+    </div>
+
+    <script>
+        // Load and render data from JSON
+        let experimentsData = [];
+        let calculatedExperimentsData = [];
+        // The one element every delegated handler and every render targets.
+        const tableBody = document.getElementById('tableBody');
+        const DEFAULT_BASE_RATE = 5;
+
+        function getSelectedMde() {
+            return parseFloat(document.getElementById('mdeInput').value) || 2;
+        }
+
+        function getExperimentBaseRate(experiment) {
+            return experiment.baseRate || DEFAULT_BASE_RATE;
+        }
+
+        function withCalculatedStats(data) {
+            const mde = getSelectedMde();
+            return (Array.isArray(data) ? data : []).map(experiment => {
+                const baseRate = getExperimentBaseRate(experiment);
+                const calculated = calculateStatsForItem(experiment, baseRate, mde);
+
+                if (Array.isArray(experiment.additionalComparisons)) {
+                    calculated.additionalComparisons = experiment.additionalComparisons.map(comp =>
+                        calculateStatsForItem(comp, baseRate, mde)
+                    );
+                }
+
+                return calculated;
+            });
+        }
+
+        function calculateStatsForItem(item, baseRate, mde) {
+            return {
+                ...item,
+                power: recalculatePower(item.sampleSize, item.primaryMetricType, mde, baseRate),
+                pvalue: recalculatePValue(item.sampleSize, item.primaryMetricType, item.primaryMetric, baseRate),
+                secondaryPvalue: recalculatePValue(item.sampleSize, item.secondaryMetricType, item.secondaryMetric, baseRate)
+            };
+        }
+
+        // Thousands separators. A count of 0 must read as "0", so this is the
+        // plain formatter.
+        function countLabel(num) {
+            return String(num).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+        }
+
+        // Same, but blank for an empty value -- table cells show nothing rather
+        // than a zero.
+        function formatNumber(num) {
+            if (num === null || num === undefined || num === 0) return '';
+            return countLabel(num);
+        }
+
+        // Format p-value for display
+        function formatPValue(p) {
+            if (p === null || p === undefined) return '';
+            if (p >= 0 && p < 0.001) return '< 0.001';
+            return p.toFixed(3);
+        }
+
+        // Helper function to display value or blank.
+        function displayValue(value, suffix = '') {
+            if (value === null || value === undefined || value === '' || value === 0) return '';
+            return suffix ? `${value}${suffix}` : value;
+        }
+
+        // Concise launch date like "Jun 3, 2025". Blank when missing/invalid.
+        function formatLaunchDate(date) {
+            if (!date) return '';
+            const d = new Date(date);
+            if (isNaN(d)) return '';
+            const month = d.toLocaleString('en-US', { month: 'short' });
+            return `${month} ${d.getDate()}, ${d.getFullYear()}`;
+        }
+
+        // Placeholder shown in a cell that has no value to display.
+        function emptyCell() {
+            return '<span class="cell-empty"></span>';
+        }
+
+        // Render N small dots for the iteration count. Defaults to none (dash).
+        function renderIterationDots(iteration) {
+            const n = Number(iteration) || 0;
+            if (n <= 0) return emptyCell();
+            const dots = Array.from({ length: n }, () => '<span class="iteration-dot"></span>').join('');
+            return `<span class="iteration-dots" title="Iteration ${n}">${dots}</span>`;
+        }
+
+        // Icon + label for each canonical trigger type.
+        const TRIGGER_TYPES = {
+            page:        { icon: 'iconPage.png',        label: 'Page visit' },
+            interaction: { icon: 'iconInteraction.png', label: 'Interaction' },
+            segment:     { icon: 'iconSegment.png',     label: 'Segment' },
+            device:      { icon: 'iconDevice.png',      label: 'Device' }
+        };
+
+        // The trigger's types in canonical (TRIGGER_TYPES) order, ignoring input order.
+        function orderedTriggerTypes(triggered) {
+            if (!Array.isArray(triggered)) return [];
+            return Object.keys(TRIGGER_TYPES).filter(type => triggered.some(t => t.type === type));
+        }
+
+        // Stable string for sorting the Trigger column: canonical types, joined.
+        function triggerSortKey(triggered) {
+            return orderedTriggerTypes(triggered).join(',');
+        }
+
+        // Render the trigger as icons. `triggered` is an array of { type, label }
+        // objects (type is one of TRIGGER_TYPES). Each entry renders its icon in a
+        // fixed order; the per-entry label (or the type's default) drives the tooltip.
+        function renderTriggerIcons(triggered) {
+            const types = orderedTriggerTypes(triggered);
+            if (types.length === 0) return emptyCell();
+            const byType = new Map(triggered.map(t => [t.type, t]));
+            const icons = types.map(type => {
+                const def = TRIGGER_TYPES[type];
+                const tip = byType.get(type).label || def.label;
+                return `<span class="trigger-icon-wrap" data-tip="${tip}">`
+                    + `<img src="images/${def.icon}" alt="${def.label}" class="trigger-icon">`
+                    + `</span>`;
+            }).join('');
+            return `<span class="trigger-icons">${icons}</span>`;
+        }
+
+        // Smooth color for sensitivity: red(0%) → orange(50%) → green(80%+)
+        function sensitivityColor(pct) {
+            // red=#dc3545, orange=#e0a800, green=#28a745
+            const red = [220, 53, 69], orange = [224, 168, 0], green = [40, 167, 69];
+            let r, g, b;
+            if (pct <= 50) {
+                const t = pct / 50;
+                r = Math.round(red[0] + t * (orange[0] - red[0]));
+                g = Math.round(red[1] + t * (orange[1] - red[1]));
+                b = Math.round(red[2] + t * (orange[2] - red[2]));
+            } else {
+                const t = Math.min(1, (pct - 50) / 30);
+                r = Math.round(orange[0] + t * (green[0] - orange[0]));
+                g = Math.round(orange[1] + t * (green[1] - orange[1]));
+                b = Math.round(orange[2] + t * (green[2] - orange[2]));
+            }
+            return `rgb(${r},${g},${b})`;
+        }
+
+        // Blend from base gray (#999) to red (#dc3545) by ratio t (0-1)
+        function blendToRed(t) {
+            const r = Math.round(153 + t * (220 - 153));
+            const g = Math.round(153 + t * (53 - 153));
+            const b = Math.round(153 + t * (69 - 153));
+            return `rgb(${r},${g},${b})`;
+        }
+
+        // Format Type M (exaggeration ratio) for display
+        function formatTypeM(powerPct) {
+            const m = typeM(powerPct / 100);
+            if (m === null) return { text: '', color: '#999' };
+            // Cap at 2 significant digits: drop the decimal once we hit double digits
+            const val = m >= 10 ? Math.round(m).toString() : m.toFixed(1);
+            // Blend gray→red from 2x to 5x+
+            const t = m <= 2 ? 0 : Math.min(1, (m - 2) / 3);
+            return { text: val + 'x', color: blendToRed(t) };
+        }
+
+        // Format Type S (wrong sign probability) for display
+        function formatTypeS(powerPct) {
+            const s = typeS(powerPct / 100);
+            if (s === null) return { text: '', color: '#999' };
+            const pct = s * 100;
+            // Cap at 2 significant digits: drop the decimal once we hit double digits
+            const text = pct < 0.1 ? '< 0.1%' : (pct >= 10 ? Math.round(pct) + '%' : pct.toFixed(1) + '%');
+            // Blend gray→red from 10% to 40%+
+            const t = pct <= 10 ? 0 : Math.min(1, (pct - 10) / 30);
+            return { text, color: blendToRed(t) };
+        }
+
+        // Compute metric display properties from raw values
+        function metricProps(value, label) {
+            const hasValue = value !== null && value !== undefined && value !== '' && !isNaN(Number(value));
+            const cls = hasValue ? (Number(value) >= 0 ? 'metric-positive' : 'metric-negative') : '';
+            const sign = hasValue && Number(value) >= 0 ? '+' : '';
+            const valueDisplay = hasValue ? `${sign}${value}%` : '';
+            const labelDisplay = label || '';
+            return { cls, sign, valueDisplay, labelDisplay };
+        }
+
+        // Render the shared metric/pvalue/sample/power cells as HTML string
+        function renderMetricCells(d) {
+            const pm = metricProps(d.primaryMetric, d.primaryMetricLabel);
+            const sm = metricProps(d.secondaryMetric, d.secondaryMetricLabel);
+            const pvalueClass = d.pvalue != null && d.pvalue < 0.05 ? 'pvalue-significant' : 'pvalue-not-significant';
+            const powerColor = d.power != null ? sensitivityColor(d.power) : '#999';
+
+            return `
+                <td class="col-metric">
+                    <div class="metric-container ${pm.cls}">
+                        <span class="${pm.cls}">${pm.valueDisplay}</span>
+                        <span class="metric-label">${pm.labelDisplay}${d.primaryMetricType ? ` (${d.primaryMetricType})` : ''}</span>
+                    </div>
+                </td>
+                <td class="col-metric-p pvalue ${pvalueClass}"><span class="pvalue-text">${formatPValue(d.pvalue)}</span></td>
+                <td class="col-secondary">
+                    <div class="metric-container secondary-metric ${sm.cls}">
+                        <span class="${sm.cls}">${sm.valueDisplay}</span>
+                        <span class="metric-label">${sm.labelDisplay}${d.secondaryMetricType ? ` (${d.secondaryMetricType})` : ''}</span>
+                    </div>
+                </td>
+                <td class="col-secondary-p pvalue ${d.secondaryPvalue != null && d.secondaryPvalue < 0.05 ? 'pvalue-significant' : 'pvalue-not-significant'}"><span class="pvalue-text">${formatPValue(d.secondaryPvalue)}</span></td>
+                <td class="col-sample">
+                    <div class="sample-size">${formatNumber(d.sampleSize)}</div>
+                </td>
+                <td class="col-power">
+                    <div class="power-group">
+                        <div class="power-col">
+                            <span class="power-value power-badge" style="background-color: ${powerColor}">${displayValue(d.power, '%')}</span>
+                            <span class="power-stat-label">${getSelectedMde()}% MDE</span>
+                        </div>
+                        ${d.power != null ? (() => {
+                            const tm = formatTypeM(d.power);
+                            const ts = formatTypeS(d.power);
+                            return `<div class="power-col">
+                                <span class="power-stat-value" style="color: ${tm.color}">${tm.text}</span>
+                                <span class="power-stat-label">exag.</span>
+                            </div>
+                            <div class="power-col">
+                                <span class="power-stat-value" style="color: ${ts.color}">${ts.text}</span>
+                                <span class="power-stat-label">sign err.</span>
+                            </div>`;
+                        })() : ''}
+                    </div>
+                </td>`;
+        }
+
+        // Refresh the full UI after a data change: regenerate table, highlight, summary bar
+        // ---- View state -------------------------------------------------------
+        // Single source of truth for what the table shows. Every query (sort,
+        // search, tab match, counts) reads these arrays; the DOM is written to
+        // and never read back. That keeps query cost proportional to the data
+        // rather than to the number of rendered elements, and lets us render
+        // only one page at a time.
+        const PAGE_SIZE_KEY = 'rerun_page_size';
+        const PAGE_SIZE_OPTIONS = [20, 50, 100, 250];
+        const DEFAULT_PAGE_SIZE = 20;
+
+        // localStorage throws in private windows and when the quota is full, and
+        // every call site wants the same thing: carry on without persisting. These
+        // two wrappers hold that decision so the rest of the code need not.
+        function readStored(key, fallback = null) {
+            try {
+                const raw = localStorage.getItem(key);
+                return raw === null ? fallback : raw;
+            } catch (e) {
+                return fallback;
+            }
+        }
+
+        // Returns false when the value could not be stored, for the callers that
+        // need to say so; most ignore it.
+        function writeStored(key, value) {
+            try {
+                localStorage.setItem(key, value);
+                return true;
+            } catch (e) {
+                return false;
+            }
+        }
+
+        function loadPageSize() {
+            const saved = parseInt(readStored(PAGE_SIZE_KEY), 10);
+            return PAGE_SIZE_OPTIONS.includes(saved) ? saved : DEFAULT_PAGE_SIZE;
+        }
+
+        const view = {
+            rows: [],       // flattened parents + sub-rows, in display order
+            filtered: [],   // after search + tab filter
+            page: 0,
+            pageSize: loadPageSize()
+        };
+
+        // Flatten the experiment tree into one ordered array of row descriptors.
+        // A sub-row carries a reference to its parent descriptor, so family
+        // ordering is a property of the data -- nothing can be orphaned by a
+        // sort, which is what the old reattachSubRows() existed to repair.
+        function buildViewRows(experiments) {
+            const rows = [];
+            experiments.forEach(experiment => {
+                const parent = {
+                    kind: 'parent',
+                    item: experiment,
+                    experiment,
+                    selectionKey: experimentSelectionKey(experiment),
+                    experimentId: experiment.id || experiment.name || '',
+                    children: []
+                };
+                parent.searchText = rowSearchText(parent);
+                rows.push(parent);
+
+                if (!Array.isArray(experiment.additionalComparisons)) return;
+                experiment.additionalComparisons.forEach(comparison => {
+                    const child = {
+                        kind: 'sub',
+                        item: comparison,
+                        experiment,
+                        comparison,
+                        parent,
+                        selectionKey: comparisonSelectionKey(experiment, comparison),
+                        experimentId: '',
+                        children: []
+                    };
+                    child.searchText = rowSearchText(child);
+                    parent.children.push(child);
+                    rows.push(child);
+                });
+            });
+            return rows;
+        }
+
+        // Precomputed once per row so search never re-reads rendered text (the
+        // old row.textContent read forced layout on every keystroke). Mirrors
+        // the fields a user can see, normalised the same way the query is.
+        function rowSearchText(viewRow) {
+            const item = viewRow.item;
+            const parts = viewRow.kind === 'sub'
+                ? ['vs.', item.variationName, viewRow.experiment.name]
+                : [item.name, item.id, item.owner, formatLaunchDate(item.date)];
+            parts.push(
+                item.change,
+                item.decision,
+                item.primaryMetricLabel, item.secondaryMetricLabel,
+                displayValue(item.primaryMetric, '%'), secondaryDataAttr(item),
+                formatNumber(item.sampleSize)
+            );
+            return parts.filter(Boolean).join(' ').toLowerCase().replace(/[,\s]/g, '');
+        }
+
+        // Sort values come from the data, not from parsed data- attributes.
+        function rowSortValue(viewRow, column, type) {
+            const item = viewRow.item;
+            const experiment = viewRow.experiment;
+            let value;
+            switch (column) {
+                case 'name': value = viewRow.kind === 'sub' ? (experiment.name || '') : (item.name || ''); break;
+                case 'date': value = viewRow.kind === 'sub' ? '' : (item.date || ''); break;
+                case 'decision': value = item.decision || ''; break;
+                case 'change': value = item.change || ''; break;
+                case 'metric': value = item.primaryMetric; break;
+                case 'pvalue': value = item.pvalue; break;
+                case 'secondary': value = secondaryDataAttr(item); break;
+                case 'secondaryPvalue': value = item.secondaryPvalue; break;
+                case 'sample': value = item.sampleSize; break;
+                case 'power': value = item.power; break;
+                case 'triggered': value = viewRow.kind === 'sub' ? '' : triggerSortKey(item.triggered); break;
+                case 'traffic': value = viewRow.kind === 'sub' ? '' : item.traffic; break;
+                case 'iteration': value = viewRow.kind === 'sub' ? 0 : (item.iterations || 0); break;
+                case 'owner': value = viewRow.kind === 'sub' ? '' : (item.owner || ''); break;
+                default: value = item[column];
+            }
+            if (type === 'number') {
+                const n = parseFloat(value);
+                return Number.isFinite(n) ? n : 0;
+            }
+            return String(value === null || value === undefined ? '' : value).toLowerCase();
+        }
+
+        // Does this row match the active tab's predicate? Reads the data, so it
+        // works for rows that are not currently rendered.
+        function rowMatchesTab(viewRow, tabType) {
+            const item = viewRow.item;
+            const config = TAB_CONFIG[tabType];
+            if (!config?.matches) return false;
+            return config.matches({
+                metric: numOrNaN(item.primaryMetric),
+                pvalue: numOrNaN(item.pvalue),
+                secondary: secondaryDataAttr(item),
+                decision: item.decision || ''
+            }, config.params || {}) || false;
+        }
+
+        function numOrNaN(value) {
+            const n = parseFloat(value);
+            return Number.isFinite(n) ? n : NaN;
+        }
+
+        function refreshUI(data) {
+            experimentsData = Array.isArray(data) ? data : [];
+            calculatedExperimentsData = withCalculatedStats(experimentsData);
+            view.rows = buildViewRows(calculatedExperimentsData);
+            view.page = 0;
+            pruneRerunSelectionsToDataset();
+            const activeTab = document.querySelector('.tab.active');
+            if (activeTab) {
+                updateHighlighting(activeTab.dataset.tab);
+            } else {
+                renderView();
+                updateSummaryBar(calculatedExperimentsData);
+            }
+            initialDataLoaded = true;
+        }
+
+        // Builds an element in one call. `props` sets properties directly
+        // (textContent, value, colSpan...), except `class` and `dataset`, which are
+        // named for what they set, and hyphenated names, which are attributes.
+        // Falsy children are skipped, so a conditional child needs no branch.
+        function el(tag, props = {}, children = []) {
+            const node = document.createElement(tag);
+            Object.entries(props).forEach(([name, value]) => {
+                if (value == null) return;
+                if (name === 'dataset') Object.assign(node.dataset, value);
+                else if (name === 'class') node.className = value;
+                // Hyphenated names (aria-*, data-*) are attributes, not properties.
+                else if (name.includes('-')) node.setAttribute(name, value);
+                else node[name] = value;
+            });
+            [].concat(children).forEach(child => {
+                if (child) node.appendChild(child);
+            });
+            return node;
+        }
+
+        function datasetValue(value) {
+            return value === null || value === undefined ? '' : value;
+        }
+
+        function secondaryDataAttr(item) {
+            const sm = metricProps(item.secondaryMetric, item.secondaryMetricLabel);
+            return sm.valueDisplay === '' ? '' : `${sm.sign}${item.secondaryMetric}% ${item.secondaryMetricLabel || ''}`;
+        }
+
+        const RERUN_SELECTION_KEY = 'rerun_selected_keys';
+
+        // Startup ordering: a restored cache (API or import) renders rows and runs
+        // highlighting/sorting synchronously while this script is still executing,
+        // so every piece of module state that path touches must be declared here,
+        // above the cache load, rather than beside the code that uses it.
+        let currentSort = { column: null, direction: null, mode: null };
+        let highlightNavIndex = -1;
+        let highlightReferenceRow = null;
+
+        // Cells are addressed by column class, never by position, so adding or
+        // reordering a column cannot silently point these at the wrong cell.
+        const SIGNAL_CELLS = {
+            primary: 'td.col-metric',
+            primaryP: 'td.col-metric-p',
+            secondary: 'td.col-secondary',
+            secondaryP: 'td.col-secondary-p'
+        };
+
+        // Per-tab editable highlighting parameters. Values here are the live,
+        // session-only thresholds; editing an input in the tab panel mutates the
+        // corresponding `value` and re-runs highlighting. `matches` reads from
+        // `params` so it always reflects the current values.
+        //
+        // Each param: { key, value, step, min, max, suffix }. `template` is an
+        // array of strings and { param } tokens that render the rule as an inline
+        // sentence with the numbers as editable inputs.
+        //
+        // Declared early (before any data load) because a restored cache can
+        // render rows and run highlighting synchronously during script startup.
+        const TAB_CONFIG = {
+            rerun: {
+                title: 'Your Rerun List',
+                subtitle: 'Check experiments in any tab to build a rerun or replication list.'
+            },
+            'almost-significant': {
+                title: 'Your "Almost" Significant Tests',
+                subtitle: 'Likely worth replicating and running with more power.',
+                countSubtitle: (matchCount, totalCount) =>
+                    `${matchCount} out of ${totalCount} experiments likely worth replicating and running with more power.`,
+                params: {
+                    minEffect: { value: 0, step: 0.5, suffix: '%' },
+                    pMin: { value: 0.05, step: 0.01, min: 0, max: 1 },
+                    pMax: { value: 0.15, step: 0.01, min: 0, max: 1 },
+                    // A row already marked Shipped has had its call made, so it drops
+                    // out by default -- this tab is about tests still worth another
+                    // look, not ones already decided. Editable like the thresholds,
+                    // in case someone wants to see shipped tests too.
+                    decisionFilter: { value: 'Not Shipped', options: ['Not Shipped', 'Shipped', 'Either'] }
+                },
+                template: p => [
+                    'Highlight when', { param: 'decisionFilter' },
+                    'and effect >', { param: 'minEffect' },
+                    ' and p-value between', { param: 'pMin' }, 'and', { param: 'pMax' }
+                ],
+                matches: ({ metric, pvalue, decision }, p) =>
+                    decisionMatches(decision, p.decisionFilter.value)
+                    && metric > p.minEffect.value && pvalue >= p.pMin.value && pvalue <= p.pMax.value,
+                // Per-cell signals lit within a matching row. Each predicate reads the
+                // same live params as `matches` plus the row's parsed values. A cell
+                // only glows when its own signal fires — so a matching row can still
+                // show a weak/disagreeing cell.
+                signals: {
+                    primary: ({ metric }, p) => metric > p.minEffect.value,
+                    primaryP: ({ pvalue }, p) => pvalue >= p.pMin.value && pvalue <= p.pMax.value,
+                    secondary: ({ metric, secondary }) => sameDirection(metric, secondary),
+                    secondaryP: ({ secondaryPvalue }) => secondaryPvalue != null && secondaryPvalue < 0.05
+                }
+            },
+            lemon: {
+                title: 'Your Squeezable Winning Tests',
+                subtitle: 'Likely worth replicating elsewhere and/or with higher intensity.',
+                countSubtitle: (matchCount, totalCount) =>
+                    `${matchCount} out of ${totalCount} experiments likely worth replicating elsewhere and/or with higher intensity.`,
+                params: {
+                    minEffect: { value: 2, step: 0.5, suffix: '%' },
+                    pMax: { value: 0.05, step: 0.01, min: 0, max: 1 }
+                },
+                template: p => [
+                    'Highlight when effect >', { param: 'minEffect' },
+                    ' and p-value ≤', { param: 'pMax' }
+                ],
+                matches: ({ metric, pvalue }, p) =>
+                    metric > p.minEffect.value && pvalue <= p.pMax.value,
+                signals: {
+                    primary: ({ metric }, p) => metric > p.minEffect.value,
+                    primaryP: ({ pvalue }, p) => pvalue <= p.pMax.value,
+                    secondary: ({ metric, secondary }) => sameDirection(metric, secondary),
+                    secondaryP: ({ secondaryPvalue }) => secondaryPvalue != null && secondaryPvalue < 0.05
+                }
+            },
+            'false-pos': {
+                title: 'Too Good To Be True Tests',
+                subtitle: 'False positive results? Maybe worth double checking.',
+                countSubtitle: (matchCount, totalCount) =>
+                    `${matchCount} out of ${totalCount} experiments may be false positives worth double checking.`,
+                params: {
+                    minEffect: { value: 5, step: 0.5, suffix: '%' },
+                    pMin: { value: 0.05, step: 0.01, min: 0, max: 1 },
+                    // A shaky win only deserves a second look once someone has
+                    // actually acted on it -- an unshipped one hasn't cost anything
+                    // yet, by default.
+                    decisionFilter: { value: 'Shipped', options: ['Shipped', 'Not Shipped', 'Either'] }
+                },
+                template: p => [
+                    'Highlight when', { param: 'decisionFilter' },
+                    'and effect >', { param: 'minEffect' },
+                    ' and p-value >', { param: 'pMin' }
+                ],
+                matches: ({ metric, pvalue, decision }, p) =>
+                    decisionMatches(decision, p.decisionFilter.value)
+                    && metric > p.minEffect.value && pvalue > p.pMin.value,
+                signals: {
+                    primary: ({ metric }, p) => metric > p.minEffect.value,
+                    primaryP: ({ pvalue }, p) => pvalue > p.pMin.value
+                }
+            },
+            'false-neg': {
+                title: 'Too Good To Be False',
+                subtitle: 'Find the false negatives worth replicating at higher power.',
+                countSubtitle: (matchCount, totalCount) =>
+                    `${matchCount} out of ${totalCount} experiments may be false negatives worth replicating at higher power.`,
+                params: {
+                    maxEffect: { value: 0, step: 0.5, suffix: '%' },
+                    pMin: { value: 0.05, step: 0.01, min: 0, max: 1 },
+                    // A promising result that was never shipped is exactly what this
+                    // tab is for by default; one that already shipped has already had
+                    // its second look.
+                    decisionFilter: { value: 'Not Shipped', options: ['Not Shipped', 'Shipped', 'Either'] }
+                },
+                template: p => [
+                    'Highlight when', { param: 'decisionFilter' },
+                    'and effect <', { param: 'maxEffect' },
+                    ', p-value >', { param: 'pMin' }, ' and secondary is positive'
+                ],
+                matches: ({ metric, pvalue, secondary, decision }, p) =>
+                    decisionMatches(decision, p.decisionFilter.value)
+                    && metric < p.maxEffect.value && pvalue > p.pMin.value && (secondary || '').startsWith('+'),
+                signals: {
+                    primary: ({ metric }, p) => metric < p.maxEffect.value,
+                    primaryP: ({ pvalue }, p) => pvalue > p.pMin.value,
+                    secondary: ({ secondary }) => (secondary || '').startsWith('+'),
+                    secondaryP: ({ secondaryPvalue }) => secondaryPvalue != null && secondaryPvalue < 0.05
+                }
+            },
+            segments: {
+                title: 'Your "Interesting Segments"',
+                subtitle: 'Discover subsegments or heterogeneous treatment effects that are worth replicating.'
+            },
+            patterns: {
+                title: 'Find Patterns',
+                subtitle: 'Compare and meta-analyze two or more tests together.'
+            },
+            'big-losers': {
+                title: 'Promising Losers',
+                subtitle: 'Tests with significant negative results that could use an inversion.',
+                countSubtitle: (matchCount, totalCount) =>
+                    `${matchCount} out of ${totalCount} experiments with significant negative results that could use an inversion.`,
+                params: {
+                    maxEffect: { value: 0, step: 0.5, suffix: '%' },
+                    pMax: { value: 0.05, step: 0.01, min: 0, max: 1 }
+                },
+                template: p => [
+                    'Highlight when effect <', { param: 'maxEffect' },
+                    ' and p-value ≤', { param: 'pMax' }
+                ],
+                matches: ({ metric, pvalue }, p) =>
+                    metric < p.maxEffect.value && pvalue <= p.pMax.value,
+                signals: {
+                    primary: ({ metric }, p) => metric < p.maxEffect.value,
+                    primaryP: ({ pvalue }, p) => pvalue <= p.pMax.value,
+                    secondary: ({ metric, secondary }) => sameDirection(metric, secondary),
+                    secondaryP: ({ secondaryPvalue }) => secondaryPvalue != null && secondaryPvalue < 0.05
+                },
+                sortDirection: 'asc'
+            },
+            custom: {
+                title: 'Your Custom Tests',
+                subtitle: 'Define your own rules to filter and highlight experiments.'
+            }
+        };
+
+        const selectedRerunKeys = new Set();
+        // Keys unchecked while on the Rerun tab stay visible in place until a hard refresh.
+        const rerunForgivenKeys = new Set();
+
+        // Everything else a listed row carries, as one record per key: the scenario
+        // tab it was picked from (`origin`), its change notes (`notes`), its Adjust
+        // tags (`tags`, a Set of ids) and its rerun type (`type`). Only values that
+        // differ from the defaults are stored, and a row with none has no record --
+        // so dropping or pruning a row is one delete, not one per field, and a new
+        // field needs no changes to save, load, prune or deselect.
+        const rerunDetails = new Map();
+
+        function detailFor(key) {
+            return rerunDetails.get(key) || {};
+        }
+
+        // Merge `patch` into a key's record. An empty value (undefined, null, '' or
+        // an empty Set) removes that field, and a record left with no fields is
+        // dropped, so the map never accumulates empty entries.
+        function updateDetail(key, patch) {
+            if (!key) return;
+            const record = { ...detailFor(key) };
+            Object.entries(patch).forEach(([field, value]) => {
+                const empty = value == null || value === ''
+                    || (value instanceof Set && value.size === 0);
+                if (empty) delete record[field];
+                else record[field] = value;
+            });
+            if (Object.keys(record).length) rerunDetails.set(key, record);
+            else rerunDetails.delete(key);
+        }
+
+        // Each tagged column carries one toggle asking the same question: is this
+        // the thing you would change on a rerun? What to change it to is a
+        // decision for the notes field, not for more buttons. `column` names the
+        // header's column class, so the toggle follows its column wherever it sits.
+        const RERUN_TAG_GROUPS = [
+            {
+                label: 'Change',
+                column: 'col-change',
+                tags: [
+                    { id: 'change-adjust', label: 'Adjust' }
+                ]
+            },
+            {
+                label: 'Metric',
+                column: 'col-metric',
+                tags: [
+                    { id: 'metric-adjust', label: 'Adjust' }
+                ]
+            },
+            {
+                label: 'Power',
+                column: 'col-power',
+                tags: [
+                    { id: 'power-adjust', label: 'Adjust' }
+                ]
+            },
+            {
+                label: 'Trigger',
+                column: 'col-trigger',
+                tags: [
+                    { id: 'trigger-adjust', label: 'Adjust' }
+                ]
+            }
+        ];
+
+        // How the rerun should be structured. `variants` draws the little A/B/C
+        // diagram: `muted` is a low-powered arm, `strong` an emphasised one, and
+        // `split` marks where one test ends and the follow-up begins.
+        const RERUN_TYPES = [
+            {
+                id: 'same-as-original',
+                label: 'Same as original',
+                description: 'Rerun the experiment as it was.',
+                // No diagram: the structure is unchanged, so there is nothing to
+                // show. The circles are there to describe a *new* shape.
+                variants: []
+            },
+            {
+                id: 'single-variable',
+                label: 'Single-Variable',
+                description: 'Single change A/B test.',
+                variants: [{ text: 'A' }, { text: 'B' }]
+            },
+            {
+                id: 'exploratory',
+                label: 'Exploratory',
+                description: 'Several variations tested at once.',
+                variants: [{ text: 'A' }, { text: 'B' }, { text: 'C' }, { text: 'D' }]
+            },
+            {
+                id: 'exploratory-confirmatory',
+                label: 'Exploratory + Confirmatory',
+                description: 'Lower power first, higher power second.',
+                variants: [
+                    { text: 'A' }, { text: 'b', muted: true }, { text: 'c', muted: true },
+                    { split: true }, { text: 'A' }, { text: 'B' }
+                ]
+            },
+            {
+                id: 'leap-compound',
+                label: 'Leap Compound',
+                description: 'Multiple simultaneous changes in one variant.',
+                variants: [{ text: 'A' }, { text: 'B', strong: true }]
+            },
+            {
+                id: 'intensify',
+                label: 'Intensify',
+                description: 'The same change, turned up.',
+                variants: [{ text: 'A' }, { text: 'B+' }]
+            },
+            {
+                id: 'reduce',
+                label: 'Reduce',
+                description: 'The same change, turned down.',
+                variants: [{ text: 'A' }, { text: 'B−' }]
+            },
+            {
+                id: 'remove',
+                label: 'Remove',
+                description: 'Take the element away entirely.',
+                // The empty set marks the arm where the element is gone.
+                variants: [{ text: 'A' }, { text: '∅', muted: true }]
+            },
+            {
+                id: 'intensity',
+                label: 'Intensity',
+                description: 'One change at varying strengths.',
+                variants: [{ text: 'A' }, { text: 'B+' }, { text: 'B++' }]
+            },
+            {
+                id: 'cascade',
+                label: 'Cascade',
+                description: 'Each change builds on the last.',
+                variants: [{ text: 'A' }, { text: 'B' }, { text: 'C' }, { text: 'D' }]
+            }
+        ];
+
+        const RERUN_TYPE_BY_ID = new Map(RERUN_TYPES.map(t => [t.id, t]));
+        // A rerun repeats the original unless you say otherwise, so this is the
+        // default rather than an empty prompt.
+        const DEFAULT_RERUN_TYPE = 'same-as-original';
+
+        function rerunTypeFor(key) {
+            return detailFor(key).type || DEFAULT_RERUN_TYPE;
+        }
+
+        function setRerunType(key, typeId) {
+            if (!key) return;
+            // The default needs no entry: an absent field already means it.
+            updateDetail(key, { type: typeId !== DEFAULT_RERUN_TYPE ? typeId : undefined });
+            saveRerunSelection();
+        }
+
+        // The A/B/C diagram for a type, as spans rather than an image so it stays
+        // crisp and picks up the surrounding colour.
+        function buildVariantDiagram(type) {
+            return el('span', { class: 'rerun-type-variants', 'aria-hidden': 'true' },
+                type.variants.map(variant => variant.split
+                    ? el('span', { class: 'rerun-type-split', textContent: '+' })
+                    : el('span', {
+                        class: 'rerun-type-variant'
+                            + (variant.muted ? ' is-muted' : '')
+                            + (variant.strong ? ' is-strong' : ''),
+                        textContent: variant.text
+                    })));
+        }
+
+        // A <select> carries the choice for keyboard and screen-reader users; the
+        // diagram beside it is presentation, redrawn whenever the choice changes.
+        // Sits at the right end of the notes block: the dropdown with the chosen
+        // type's description beneath it, and that type's A/B/C diagram alongside.
+        // Descriptions live under the control rather than inside the option text,
+        // which keeps the closed dropdown short.
+        function buildRerunTypePicker(key) {
+            const current = rerunTypeFor(key);
+            const type = RERUN_TYPE_BY_ID.get(current);
+            const selectId = 'rerun-type-' + encodeURIComponent(key);
+
+            const select = el('select', {
+                // A chosen structure reads as a decision, so it fills like the tag
+                // toggles do; the default stays quiet.
+                class: 'rerun-type-select' + (current !== DEFAULT_RERUN_TYPE ? ' is-set' : ''),
+                id: selectId,
+                dataset: { selectionKey: key }
+            // Label only: the description is shown beneath the control.
+            }, RERUN_TYPES.map(t => el('option', {
+                value: t.id, textContent: t.label, selected: t.id === current
+            })));
+
+            return el('div', { class: 'rerun-type-picker' }, [
+                // Label on its own line above the control.
+                el('label', { class: 'rerun-type-label', htmlFor: selectId, textContent: 'Test type' }),
+                // The diagram goes inside the select's own row, so the two are
+                // centred against each other rather than against the whole widget.
+                el('div', { class: 'rerun-type-select-row' }, [
+                    select,
+                    el('span', { class: 'rerun-type-preview' }, type && buildVariantDiagram(type))
+                ]),
+                // Description sits under the row, aligned to its left edge.
+                el('span', { class: 'rerun-type-description', textContent: type ? type.description : '' })
+            ]);
+        }
+
+        // Returns the tag's new state, so the caller can restyle its button.
+        function toggleRerunTag(key, tagId) {
+            if (!key || !tagId) return false;
+            const tags = new Set(detailFor(key).tags || []);
+            if (tags.has(tagId)) tags.delete(tagId);
+            else tags.add(tagId);
+            updateDetail(key, { tags });
+            saveRerunSelection();
+            return tags.has(tagId);
+        }
+
+        // Reflects a toggle's on/off state in its class and ARIA attribute.
+        function setTagPressed(btn, on) {
+            btn.classList.toggle('is-selected', on);
+            btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+        }
+
+        function buildRerunTagButton(key, group, tag, on) {
+            const btn = el('button', {
+                type: 'button',
+                class: 'rerun-tag',
+                title: group.label + ': ' + tag.label,
+                dataset: { tagId: tag.id, selectionKey: key }
+            }, [
+                // Placeholder glyph until real icons land; the label carries the
+                // meaning either way.
+                el('span', { class: 'rerun-tag-icon', 'aria-hidden': 'true' }),
+                el('span', { class: 'rerun-tag-label', textContent: tag.label })
+            ]);
+            setTagPressed(btn, on);
+            return btn;
+        }
+
+        // A row of real cells, one per header, so each tag group lands under the
+        // column it acts on whatever order the columns are in. Each tag is an
+        // independent toggle, so a rerun can be tagged on more than one axis.
+        function buildRerunTagRow(key, isSubRow) {
+            const selected = detailFor(key).tags || new Set();
+            const byColumn = new Map(RERUN_TAG_GROUPS.map(g => [g.column, g]));
+
+            const cells = Array.from(tableBody.closest('table').querySelectorAll('thead th'), th => {
+                const group = byColumn.get(Array.from(th.classList).find(cls => byColumn.has(cls)));
+                if (!group) return el('td');
+                return el('td', { class: 'rerun-tag-cell' },
+                    group.tags.map(tag => buildRerunTagButton(key, group, tag, selected.has(tag.id))));
+            });
+
+            return el('tr', { class: 'rerun-tag-row' + (isSubRow ? ' sub-row-tags' : '') }, cells);
+        }
+
+        // Persist the rerun list (selected keys + each row's details) across
+        // refreshes. rerunForgivenKeys is intentionally excluded — that grace
+        // period is meant to end on a hard refresh.
+        function saveRerunSelection() {
+            writeStored(RERUN_SELECTION_KEY, JSON.stringify({
+                keys: Array.from(selectedRerunKeys),
+                // Sets do not survive JSON, so tags travel as an array.
+                details: Array.from(rerunDetails.entries()).map(([key, record]) => [
+                    key, { ...record, tags: record.tags ? Array.from(record.tags) : undefined }
+                ])
+            }));
+        }
+
+        function loadRerunSelection() {
+            const raw = readStored(RERUN_SELECTION_KEY);
+            if (!raw) return;
+            try {
+                const saved = JSON.parse(raw);
+                (saved.keys || []).forEach(key => selectedRerunKeys.add(key));
+                (saved.details || []).forEach(([key, record]) => updateDetail(key, {
+                    ...record, tags: record.tags ? new Set(record.tags) : undefined
+                }));
+                // Saves from before the record shape kept each field in its own
+                // list; fold them in so nobody loses their list on upgrade.
+                (saved.origins || []).forEach(([key, origin]) => updateDetail(key, { origin }));
+                (saved.notes || []).forEach(([key, notes]) => updateDetail(key, { notes }));
+                (saved.tags || []).forEach(([key, ids]) => updateDetail(key, { tags: new Set(ids) }));
+                (saved.types || []).forEach(([key, type]) => updateDetail(key, { type }));
+            } catch (e) {
+                // Corrupt/unreadable saved selection — start fresh.
+            }
+        }
+
+        loadRerunSelection();
+
+        // Full-colour ("_Sel") variants: on the Rerun tab these replace the rerun
+        // button in the first column, so the row shows where it came from.
+        const TAB_ORIGIN_ICON = {
+            'almost-significant': 'images/iconAlmostSig_Sel.png',
+            lemon: 'images/iconLemon_Sel.png',
+            'big-losers': 'images/iconNeg_Sel.png',
+            'false-pos': 'images/iconFalsePos_Sel.png',
+            'false-neg': 'images/iconFalseNeg_Sel.png',
+            segments: 'images/iconSupriseSegment_Sel.png',
+            patterns: 'images/iconPatterns_Sel.png',
+            custom: 'images/iconCustom_Sel.png'
+        };
+
+        function experimentSelectionKey(item) {
+            return item.id || item.name || '';
+        }
+
+        function comparisonSelectionKey(experiment, comparison) {
+            const parentKey = experimentSelectionKey(experiment);
+            const comparisonKey = comparison.variationName || comparison.name || comparison.primaryMetric || '';
+            return `${parentKey}::${comparisonKey}`;
+        }
+
+        function applyRerunButtonState(row, isSelected) {
+            const btn = row.querySelector('.rerun-row-btn');
+            if (!btn) return;
+            btn.classList.toggle('selected', isSelected);
+            const icon = btn.querySelector('.rerun-row-btn-icon');
+            if (!icon) return;
+
+            // On the Rerun tab the button shows the row's originating scenario in
+            // full colour instead of the rerun glyph; elsewhere it's the rerun
+            // icon, dim when unselected and highlighted when selected.
+            const onRerunTab = getActiveTabType() === 'rerun';
+            const originSrc = TAB_ORIGIN_ICON[detailFor(row.dataset.selectionKey).origin];
+            const showOrigin = onRerunTab && isSelected && originSrc;
+            btn.classList.toggle('showing-origin', !!showOrigin);
+
+            // A parent row can appear on the Rerun tab purely as context for a
+            // selected sub-row. Mark it so its button recedes instead of looking
+            // like another actionable icon next to the coloured origin ones.
+            btn.classList.toggle('context-only', onRerunTab && !isSelected);
+
+            icon.src = showOrigin
+                ? originSrc
+                : (isSelected ? icon.dataset.selected : icon.dataset.default);
+        }
+
+        function applySelectionState(row) {
+            const isSelected = selectedRerunKeys.has(row.dataset.selectionKey);
+            applyRerunButtonState(row, isSelected);
+            row.classList.toggle('checkbox-selected', isSelected);
+            applyRerunOriginIcon(row);
+            applyExperimentNameLink(row, isSelected);
+        }
+
+        // Names read as plain text by default; a row tagged for rerun gets a
+        // link instead, pointing at the Rerun tab entry rather than out to the
+        // platform's report (that stays in the row's overflow menu).
+        function applyExperimentNameLink(row, isSelected) {
+            const name = row.querySelector('.experiment-name');
+            if (!name) return;
+            name.classList.toggle('experiment-name-link', !!isSelected);
+            if (isSelected) {
+                name.setAttribute('role', 'link');
+                name.setAttribute('tabindex', '0');
+                name.title = 'View in rerun list';
+            } else {
+                name.removeAttribute('role');
+                name.removeAttribute('tabindex');
+                name.removeAttribute('title');
+            }
+        }
+
+        // Show the origin-tab icon (Almost Significant, Squeeze The Lemon, etc.)
+        // next to a row's name only while viewing the Rerun tab.
+        // The origin scenario is shown by the first-column button on the Rerun tab
+        // (see applyRerunButtonState); this keeps its tooltip/label in step.
+        function applyRerunOriginIcon(row) {
+            const btn = row.querySelector('.rerun-row-btn');
+            if (!btn) return;
+            const originTab = detailFor(row.dataset.selectionKey).origin;
+            const showingOrigin = btn.classList.contains('showing-origin');
+            const label = showingOrigin ? (TAB_CONFIG[originTab]?.title || '') : '';
+            const text = label ? `From: ${label}` : 'Add to rerun list';
+            btn.title = text;
+            btn.setAttribute('aria-label', text);
+        }
+
+        // Prunes against the whole dataset, not the rendered page. Pruning to
+        // rendered rows would silently drop every selection that happens to be
+        // on another page once the table is paginated.
+        function pruneRerunSelectionsToDataset() {
+            const renderedKeys = new Set(
+                view.rows.map(viewRow => viewRow.selectionKey).filter(Boolean)
+            );
+            [selectedRerunKeys, rerunForgivenKeys, rerunDetails].forEach(store => {
+                Array.from(store.keys()).forEach(key => {
+                    if (!renderedKeys.has(key)) store.delete(key);
+                });
+            });
+            saveRerunSelection();
+        }
+
+        function setRowDataset(row, item, overrides = {}) {
+            const values = {
+                name: item.name || '',
+                date: item.date || '',
+                decision: item.decision || '',
+                change: item.change || '',
+                experimentId: item.id || item.name || '',
+                metric: item.primaryMetric,
+                secondary: secondaryDataAttr(item),
+                sample: item.sampleSize,
+                power: item.power,
+                pvalue: item.pvalue,
+                secondaryPvalue: item.secondaryPvalue,
+                triggered: triggerSortKey(item.triggered),
+                traffic: item.traffic,
+                iteration: item.iterations || 0,
+                owner: item.owner || '',
+                ...overrides
+            };
+
+            Object.entries(values).forEach(([key, value]) => {
+                row.dataset[key] = datasetValue(value);
+            });
+        }
+
+        function trafficOpacity(traffic) {
+            const value = Number(traffic);
+            if (!Number.isFinite(value)) return 0.3;
+            return value >= 20 ? 0.3 : 0.3 + (20 - value) / 20 * 0.7;
+        }
+
+        function trafficBarClass(traffic) {
+            return Number(traffic) >= 100 ? ' traffic-bar-full' : '';
+        }
+
+        // Trailing cells (trigger \u2192 owner) that differ between a main experiment row
+        // and a comparison sub-row. Kept in one place so column order stays in sync.
+        function renderTrailingCells(item, { compact = false } = {}) {
+            if (compact) {
+                return `
+                <td class="col-trigger triggered">${emptyCell()}</td>
+                <td class="col-reach">${emptyCell()}</td>
+                <td class="col-iteration">${emptyCell()}</td>
+                <td class="col-owner">${emptyCell()}</td>`;
+            }
+            const ownerHTML = item.owner
+                ? `<a href="#" class="owner-link">${item.owner}</a>`
+                : emptyCell();
+            const reach = displayValue(item.traffic, '%');
+            return `
+                <td class="col-trigger triggered">${renderTriggerIcons(item.triggered)}</td>
+                <td class="col-reach">
+                    <div class="traffic-container">
+                        <div class="traffic-bar-wrapper">
+                            <div class="traffic-bar${trafficBarClass(item.traffic)}" style="width: ${item.traffic || 0}%; opacity: ${trafficOpacity(item.traffic)};"></div>
+                        </div>
+                        <span class="traffic-subtitle">${reach ? `${reach} of traffic` : ''}</span>
+                    </div>
+                </td>
+                <td class="col-iteration">${renderIterationDots(item.iterations)}</td>
+                <td class="col-owner">${ownerHTML}</td>`;
+        }
+
+        function renderRerunButton() {
+            return `<button type="button" class="rerun-row-btn" title="Add to rerun list" aria-label="Add to rerun list">
+                <img src="images/iconRerun.svg" data-default="images/iconRerun.svg" data-selected="images/iconRerun_Sel.svg" alt="" class="rerun-row-btn-icon">
+            </button>`;
+        }
+
+        // Every row carries an overflow button at the right edge of its name
+        // cell. It opens a small dropdown (View Report / rerun actions) rather
+        // than acting directly, so the row's own actions stay discoverable on
+        // every tab.
+        function renderRerunMenuButton() {
+            return `<button type="button" class="rerun-menu-btn" title="Row actions" aria-label="Row actions" aria-haspopup="true" aria-expanded="false">⋯</button>`;
+        }
+
+        // What the variation actually did, as reported by the platform. Free text,
+        // so it is escaped and truncated by CSS with the full value on hover.
+        function renderChangeCell(item) {
+            const change = item.change;
+            if (!change) return `<td class="col-change change-cell">${emptyCell()}</td>`;
+            return `<td class="col-change change-cell"><span class="change-text" title="${escapeAttr(change)}">${escapeHtml(change)}</span></td>`;
+        }
+
+        // Whether the experiment shipped, as reported by the platform (blank
+        // when it has no decision to report). A small pill rather than plain
+        // text, coloured the same green/red the metric values use, so a
+        // decision reads at a glance without competing with the data columns.
+        function renderDecisionCell(item) {
+            const decision = item.decision;
+            if (!decision) return `<td class="col-decision">${emptyCell()}</td>`;
+            const cls = decision === 'Shipped' ? 'decision-shipped' : 'decision-not-shipped';
+            return `<td class="col-decision"><span class="decision-pill ${cls}">${escapeHtml(decision)}</span></td>`;
+        }
+
+        function escapeHtml(value) {
+            return String(value)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;');
+        }
+
+        function escapeAttr(value) {
+            return escapeHtml(value).replace(/"/g, '&quot;');
+        }
+
+        function renderExperimentRow(experiment) {
+            const row = document.createElement('tr');
+            setRowDataset(row, experiment, {
+                selectionKey: experimentSelectionKey(experiment)
+            });
+
+            // The report URL lives on the row so the overflow menu's "View Report"
+            // item can find it; the name itself is plain text unless the row is
+            // tagged for rerun (see applyExperimentNameLink).
+            if (experiment.url) row.dataset.reportUrl = experiment.url;
+
+            row.innerHTML = `
+                <td class="col-select">${renderRerunButton()}</td>
+                <td class="col-name">
+                    <div class="experiment-name-container">
+                        <div class="experiment-name-row">
+                            <span class="experiment-name">${experiment.name || 'Untitled'}</span>
+                        </div>
+                        ${experiment.id ? `<span class="experiment-id">${experiment.id}</span>` : ''}
+                    </div>
+                    ${renderRerunMenuButton()}
+                </td>
+                <td class="col-started launch-date">${formatLaunchDate(experiment.date)}</td>
+                ${renderDecisionCell(experiment)}
+                ${renderChangeCell(experiment)}
+                ${renderMetricCells(experiment)}
+                ${renderTrailingCells(experiment)}
+            `;
+
+            applySelectionState(row);
+            return row;
+        }
+
+        function renderComparisonRow(experiment, comparison) {
+            const row = document.createElement('tr');
+            row.classList.add('sub-row');
+            setRowDataset(row, comparison, {
+                parent: experiment.id || experiment.name,
+                name: experiment.name || '',
+                date: '',
+                experimentId: '',
+                triggered: '',
+                traffic: '',
+                iteration: '',
+                owner: '',
+                selectionKey: comparisonSelectionKey(experiment, comparison)
+            });
+
+            row.innerHTML = `
+                <td class="col-select">${renderRerunButton()}</td>
+                <td class="col-name">
+                    <div class="experiment-name-container">
+                        <div class="experiment-name-row">
+                            <span class="sub-row-name"><span class="sub-row-arrow">\u25B8</span>vs. ${comparison.variationName}</span>
+                        </div>
+                    </div>
+                    ${renderRerunMenuButton()}
+                </td>
+                <td class="col-started launch-date">${emptyCell()}</td>
+                ${renderDecisionCell(comparison)}
+                ${renderChangeCell(comparison)}
+                ${renderMetricCells(comparison)}
+                ${renderTrailingCells(comparison, { compact: true })}
+            `;
+
+            applySelectionState(row);
+            return row;
+        }
+
+        // ---- Render pipeline --------------------------------------------------
+        // data -> filter -> sort -> slice -> DOM. Only the current page reaches
+        // the document, so render cost is fixed regardless of dataset size.
+
+        function currentSearchTerm() {
+            const value = document.querySelector('.search-box')?.value || '';
+            return value.toLowerCase().replace(/[,\s]/g, '');
+        }
+
+        // Filtering keeps families together: a parent is kept when it or any of
+        // its comparisons matches, and a matching comparison pulls in its parent.
+        function filterViewRows(tabType) {
+            const term = currentSearchTerm();
+            const keep = new Set();
+
+            view.rows.forEach(viewRow => {
+                const matchesSearch = !term || viewRow.searchText.includes(term);
+                const matchesTabFilter = tabType === 'rerun' ? rowVisibleInRerun(viewRow) : true;
+                if (!matchesSearch || !matchesTabFilter) return;
+                keep.add(viewRow);
+                if (viewRow.kind === 'sub') keep.add(viewRow.parent);
+            });
+
+            return view.rows.filter(viewRow => keep.has(viewRow));
+        }
+
+        // Order parents, then expand each with its kept children. Grouped mode
+        // floats families containing a highlighted row to the top.
+        function sortViewRows(rows, tabType) {
+            const { column, direction, mode } = currentSort;
+            const kept = new Set(rows);
+            const parents = rows.filter(r => r.kind === 'parent');
+
+            const expand = ordered => ordered.flatMap(parent =>
+                [parent, ...parent.children.filter(child => kept.has(child))]);
+
+            if (!column) return expand(parents);
+
+            const type = SORT_COLUMN_TYPES[column] || 'string';
+            const sorter = (a, b) => {
+                const aVal = rowSortValue(a, column, type);
+                const bVal = rowSortValue(b, column, type);
+                return direction === 'asc'
+                    ? (aVal > bVal ? 1 : aVal < bVal ? -1 : 0)
+                    : (aVal < bVal ? 1 : aVal > bVal ? -1 : 0);
+            };
+
+            if (mode === 'grouped' && tabType !== 'rerun') {
+                const familyHighlighted = parent =>
+                    rowMatchesTab(parent, tabType)
+                    || parent.children.some(child => rowMatchesTab(child, tabType));
+                const promoted = parents.filter(familyHighlighted).sort(sorter);
+                const rest = parents.filter(parent => !familyHighlighted(parent)).sort(sorter);
+                return expand(promoted.concat(rest));
+            }
+
+            return expand(parents.slice().sort(sorter));
+        }
+
+        // Column -> sort type, read from the header so it stays in step with the
+        // markup rather than being duplicated here.
+        // grouped-desc → grouped-asc → flat-desc → flat-asc → (off the end: reset)
+        const SORT_CYCLE = [
+            ['grouped', 'desc'], ['grouped', 'asc'], ['flat', 'desc'], ['flat', 'asc']
+        ];
+
+        const SORT_COLUMN_TYPES = (() => {
+            const types = {};
+            document.querySelectorAll('th.sortable').forEach(th => {
+                types[th.dataset.column] = th.dataset.type || 'string';
+            });
+            return types;
+        })();
+
+        function totalPages() {
+            return Math.max(1, Math.ceil(view.filtered.length / view.pageSize));
+        }
+
+        // The one place rows are written to the document.
+        function renderView(tabType = getActiveTabType()) {
+            view.filtered = sortViewRows(filterViewRows(tabType), tabType);
+            view.page = Math.min(Math.max(0, view.page), totalPages() - 1);
+
+            const start = view.page * view.pageSize;
+            const pageRows = view.filtered.slice(start, start + view.pageSize);
+
+            // Row-scoped UI points at elements that are about to be discarded, and
+            // a notes field still holding focus would lose an uncommitted edit.
+            closeRowActionMenu();
+            commitOpenNotesField();
+            tableBody.innerHTML = '';
+
+            // One reflow rather than one per row.
+            const fragment = document.createDocumentFragment();
+            pageRows.forEach(viewRow => {
+                fragment.appendChild(viewRow.kind === 'sub'
+                    ? renderComparisonRow(viewRow.experiment, viewRow.comparison)
+                    : renderExperimentRow(viewRow.item));
+            });
+            tableBody.appendChild(fragment);
+
+            applyRowHighlighting(pageRows, tabType);
+            attachCheckboxListeners();
+            syncRerunNoteRows(tabType);
+            renderPaginationControls();
+            updateRerunTabCount();
+            updateTabCountBadges();
+        }
+
+        // Highlighting is applied to the rendered page only -- it is presentation.
+        // Membership questions (counts, sort promotion) ask the data instead.
+        function applyRowHighlighting(pageRows, tabType) {
+            if (tabType === 'rerun') return;
+            const config = TAB_CONFIG[tabType];
+            // Rendered 1:1 with pageRows, and note/expand strips are added later.
+            const rendered = tableBody.children;
+
+            pageRows.forEach((viewRow, index) => {
+                const row = rendered[index];
+                if (!row || !rowMatchesTab(viewRow, tabType)) return;
+                row.classList.add('highlighted-row');
+
+                const item = viewRow.item;
+                if (config?.signals) {
+                    applySignals(row, config, {
+                        metric: numOrNaN(item.primaryMetric),
+                        pvalue: numOrNaN(item.pvalue),
+                        secondary: secondaryDataAttr(item),
+                        secondaryPvalue: numOrNaN(item.secondaryPvalue)
+                    });
+                }
+            });
+        }
+
+        function goToPage(page) {
+            view.page = page;
+            renderView();
+            updateHighlightNav();
+            document.querySelector('.table-container')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        function renderPaginationControls() {
+            const host = document.getElementById('paginationControls');
+            if (!host) return;
+
+            const total = view.filtered.length;
+            // The size selector stays available once there is more than the
+            // smallest page worth of rows, so it can be raised again after the
+            // filter that shrank the set is cleared.
+            if (total <= Math.min(...PAGE_SIZE_OPTIONS)) {
+                host.innerHTML = '';
+                host.style.display = 'none';
+                return;
+            }
+
+            const pages = totalPages();
+            const start = view.page * view.pageSize;
+            const end = Math.min(start + view.pageSize, total);
+            const options = PAGE_SIZE_OPTIONS
+                .map(size => `<option value="${size}"${size === view.pageSize ? ' selected' : ''}>${size}</option>`)
+                .join('');
+
+            // Count experiments, not rows: a family's comparison rows are part of
+            // the experiment above them, so counting rows would overstate how much
+            // there is to look at ("of 30" for 23 experiments and 7 comparisons).
+            const pageRows = view.filtered.slice(start, start + view.pageSize);
+            const shown = pageRows.filter(row => row.kind === 'parent').length;
+            const totalExperiments = view.filtered.filter(row => row.kind === 'parent').length;
+            const noun = totalExperiments === 1 ? 'experiment' : 'experiments';
+            const status = shown === totalExperiments
+                ? `Showing all ${countLabel(totalExperiments)} ${noun}`
+                : `Showing ${countLabel(shown)} of ${countLabel(totalExperiments)} ${noun}`;
+
+            host.style.display = '';
+            host.innerHTML = `
+                <span class="pagination-status">${status}</span>
+                <span class="pagination-buttons">
+                    <label class="pagination-size">
+                        Rows
+                        <select id="pageSizeSelect" class="pagination-select">${options}</select>
+                    </label>
+                    <button type="button" class="pagination-btn" data-page="prev"${view.page === 0 ? ' disabled' : ''}>Previous</button>
+                    <span class="pagination-page">Page ${view.page + 1} of ${pages}</span>
+                    <button type="button" class="pagination-btn" data-page="next"${view.page >= pages - 1 ? ' disabled' : ''}>Next</button>
+                </span>`;
+        }
+
+        function setPageSize(size) {
+            if (!PAGE_SIZE_OPTIONS.includes(size) || size === view.pageSize) return;
+            // Keep the first currently-visible row in view rather than jumping
+            // to page 1, so changing density does not lose the reader's place.
+            const anchorIndex = view.page * view.pageSize;
+            view.pageSize = size;
+            view.page = Math.floor(anchorIndex / size);
+            writeStored(PAGE_SIZE_KEY, String(size));
+            renderView();
+            updateHighlightNav();
+        }
+
+        document.addEventListener('change', function(e) {
+            if (e.target.id !== 'pageSizeSelect') return;
+            setPageSize(parseInt(e.target.value, 10));
+        });
+
+        document.addEventListener('click', function(e) {
+            const btn = e.target.closest('.pagination-btn');
+            if (!btn || btn.disabled) return;
+            goToPage(btn.dataset.page === 'prev' ? view.page - 1 : view.page + 1);
+        });
+
+        // Data source toggle functionality
+        let isUsingApiData = false;
+        let apiConfig = {
+            platform: '',
+            apiKey: ''
+        };
+
+        const PLATFORM_REGISTRY = {
+            growthbook: {
+                label: 'GrowthBook',
+                endpoint: 'https://api.growthbook.io/api/v1/experiments',
+                mapper: GrowthBookMapper
+            },
+            convert: {
+                label: 'Convert',
+                endpoint: 'https://api.convert.com/v1/experiments',
+                mapper: ConvertMapper
+            },
+            eppo: {
+                label: 'Eppo',
+                endpoint: 'https://api.geteppo.com/v1/experiments',
+                mapper: EppoMapper
+            },
+            absmartly: {
+                label: 'ABsmartly',
+                endpoint: 'https://api.absmartly.com/v1/experiments',
+                mapper: ABsmartlyMapper
+            }
+        };
+
+        function extractExperimentArray(payload) {
+            if (Array.isArray(payload)) return payload;
+            if (!payload) return [];
+            return payload.experiments || payload.results || payload.data || [];
+        }
+
+        function mapApiPayload(platform, payload) {
+            const platformConfig = PLATFORM_REGISTRY[platform];
+            const experiments = extractExperimentArray(payload);
+            return platformConfig?.mapper
+                ? platformConfig.mapper.mapExperiments(experiments)
+                : experiments;
+        }
+
+        // Local storage cache keys (defined early — used throughout)
+        // ---- Bulk storage (IndexedDB) -----------------------------------------
+        // Experiment payloads outgrow localStorage's ~5MB UTF-16 budget at around
+        // 5,000 experiments. IndexedDB's quota is disk-proportional and it stores
+        // structured objects directly, so nothing is stringified on the way in.
+        // Small keys (platform, account id, selections) stay in localStorage --
+        // they are tiny and their synchronous reads keep startup simple.
+        const IDB_NAME = 'rerun';
+        const IDB_VERSION = 1;
+        const IDB_STORE = 'bulk';
+
+        let idbPromise = null;
+
+        function idbOpen() {
+            if (idbPromise) return idbPromise;
+            idbPromise = new Promise((resolve, reject) => {
+                if (!window.indexedDB) {
+                    reject(new Error('IndexedDB is not available in this browser'));
+                    return;
+                }
+                const request = indexedDB.open(IDB_NAME, IDB_VERSION);
+                request.onupgradeneeded = () => {
+                    const db = request.result;
+                    if (!db.objectStoreNames.contains(IDB_STORE)) {
+                        db.createObjectStore(IDB_STORE);
+                    }
+                };
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => reject(request.error || new Error('Could not open IndexedDB'));
+                // Firefox in private mode resolves neither handler.
+                request.onblocked = () => reject(new Error('IndexedDB open was blocked'));
+            }).catch(error => {
+                // Let a later call retry rather than caching the failure forever.
+                idbPromise = null;
+                throw error;
+            });
+            return idbPromise;
+        }
+
+        function idbRequest(mode, run) {
+            return idbOpen().then(db => new Promise((resolve, reject) => {
+                const tx = db.transaction(IDB_STORE, mode);
+                const request = run(tx.objectStore(IDB_STORE));
+                tx.onabort = () => reject(tx.error || new Error('IndexedDB transaction aborted'));
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => reject(request.error);
+            }));
+        }
+
+        function idbGet(key) {
+            return idbRequest('readonly', store => store.get(key));
+        }
+
+        function idbSet(key, value) {
+            return idbRequest('readwrite', store => store.put(value, key));
+        }
+
+        function idbDelete(key) {
+            return idbRequest('readwrite', store => store.delete(key));
+        }
+
+        const IDB_IMPORT_KEY = 'lastImportMappedData';
+        const IDB_GROWTHBOOK_KEY = 'growthbookRawCache';
+
+        const CACHE_KEY = 'growthbook_experiments_cache';
+        const CACHE_TIMESTAMP_KEY = 'growthbook_experiments_cache_timestamp';
+
+        // Import persistence keys
+        const IMPORT_PLATFORM_KEY = 'last_import_platform';
+        const IMPORT_ACCOUNT_ID_KEY = 'last_import_account_id';
+        const IMPORT_API_KEY_KEY = 'last_import_api_key';
+        const IMPORT_TIMESTAMP_KEY = 'last_import_timestamp';
+        const IMPORT_MAPPED_DATA_KEY = 'last_import_mapped_data';
+
+        const dataSourceToggle = document.getElementById('dataSourceToggle');
+        const modal = document.getElementById('apiConfigModal');
+        const apiKeyInput = document.getElementById('apiKeyInput');
+        const cancelBtn = document.getElementById('cancelBtn');
+        const okBtn = document.getElementById('okBtn');
+
+        dataSourceToggle.addEventListener('change', function() {
+            if (this.checked) {
+                // Show modal when switching to API
+                modal.classList.add('show');
+            } else {
+                // Switch back to dummy data — clear ALL caches
+                isUsingApiData = false;
+                initialDataLoaded = false;
+                clearImportConfig();
+                // Also clear GrowthBook API cache
+                localStorage.removeItem(CACHE_KEY);
+                localStorage.removeItem(CACHE_TIMESTAMP_KEY);
+                loadData(true);
+            }
+        });
+
+        const csvFileInput = document.getElementById('csvFileInput');
+        const csvAccountId = document.getElementById('csvAccountId');
+        const apiKeyGroup = document.getElementById('apiKeyGroup');
+        const csvFileGroup = document.getElementById('csvFileGroup');
+
+        // Load saved account ID from localStorage (or legacy sessionStorage)
+        const savedAccountId = localStorage.getItem(IMPORT_ACCOUNT_ID_KEY) || sessionStorage.getItem('convert_account_id');
+        if (savedAccountId) {
+            csvAccountId.value = savedAccountId;
+        }
+
+        // Toggle between API key and CSV file inputs based on platform selection
+        document.querySelectorAll('input[name="platform"]').forEach(radio => {
+            radio.addEventListener('change', function() {
+                if (this.value === 'csv') {
+                    apiKeyGroup.style.display = 'none';
+                    csvFileGroup.style.display = 'block';
+                } else {
+                    apiKeyGroup.style.display = 'block';
+                    csvFileGroup.style.display = 'none';
+                }
+            });
+        });
+
+        cancelBtn.addEventListener('click', function() {
+            // Close modal and revert toggle
+            modal.classList.remove('show');
+            dataSourceToggle.checked = false;
+            // Clear radio buttons
+            document.querySelectorAll('input[name="platform"]').forEach(radio => {
+                radio.checked = false;
+            });
+            apiKeyInput.value = '';
+            csvFileInput.value = '';
+            csvAccountId.value = '';
+            // Reset to show API key input by default
+            apiKeyGroup.style.display = 'block';
+            csvFileGroup.style.display = 'none';
+            // If no data loaded yet (modal was auto-opened on page load), load dummy data
+            if (!initialDataLoaded) {
+                loadData(true);
+            }
+        });
+
+        okBtn.addEventListener('click', function() {
+            // Get selected platform from radio buttons
+            const selectedPlatform = document.querySelector('input[name="platform"]:checked');
+            const platform = selectedPlatform ? selectedPlatform.value : '';
+
+            if (!platform) {
+                alert('Please select a platform');
+                return;
+            }
+
+            if (platform === 'csv') {
+                // Handle CSV file import
+                const file = csvFileInput.files[0];
+                const accountId = csvAccountId.value.trim();
+
+                if (!accountId) {
+                    alert('Please enter your Convert Account ID');
+                    return;
+                }
+
+                if (!file) {
+                    alert('Please select a CSV file');
+                    return;
+                }
+
+                // Save account ID to localStorage for future use
+                localStorage.setItem(IMPORT_ACCOUNT_ID_KEY, accountId);
+
+                // Read and parse CSV file using ConvertCSVMapper
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const csvContent = e.target.result;
+
+                    // Use ConvertCSVMapper for parsing with account ID for URL generation
+                    const parsedData = ConvertCSVMapper.parseCSV(csvContent, accountId);
+
+                    console.log('Convert CSV Import:', parsedData);
+
+                    if (parsedData.length > 0) {
+                        refreshUI(parsedData);
+
+                        // Persist in the background: the table is already correct,
+                        // and saveImportConfig reports a failed save itself.
+                        saveImportConfig('csv', { accountId, mappedData: parsedData })
+                            .catch(error => console.error('Could not persist import:', error));
+
+                        // Close modal
+                        modal.classList.remove('show');
+                        csvFileInput.value = '';
+                        csvAccountId.value = '';
+                        // Reset to show API key input by default
+                        apiKeyGroup.style.display = 'block';
+                        csvFileGroup.style.display = 'none';
+                        document.querySelectorAll('input[name="platform"]').forEach(radio => {
+                            radio.checked = false;
+                        });
+                    } else {
+                        alert('No valid data found in CSV file. Make sure it is a Convert aggregated report export with control (A) and variation (B) rows.');
+                    }
+                };
+                reader.readAsText(file);
+            } else {
+                // Handle API import
+                const apiKey = apiKeyInput.value;
+
+                if (!apiKey) {
+                    alert('Please enter an API key');
+                    return;
+                }
+
+                // Save configuration
+                apiConfig.platform = platform;
+                apiConfig.apiKey = apiKey;
+                isUsingApiData = true;
+
+                // Persist import for reload
+                saveImportConfig(platform, { apiKey })
+                    .catch(error => console.error('Could not persist import config:', error));
+
+                // Close modal
+                modal.classList.remove('show');
+
+                // Use platform-specific mapper for proper data fetching
+                if (platform === 'growthbook') {
+                    fetchGrowthBookData(apiKey);
+                } else {
+                    loadData(true);
+                }
+            }
+        });
+
+        // Close modal when clicking outside
+        modal.addEventListener('click', function(e) {
+            if (e.target === modal) {
+                cancelBtn.click();
+            }
+        });
+
+        // The rerun panel is a notes field and nothing else: the row icon puts
+        // the experiment on the list and takes it off again, so the panel has no
+        // actions of its own. Notes commit when it closes.
+
+        // Switch to the Rerun tab and bring the just-added row into view.
+        function showRowOnRerunTab(row) {
+            document.querySelector('.tab[data-tab="rerun"]')?.click();
+            row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            row.classList.add('row-flash');
+            setTimeout(() => row.classList.remove('row-flash'), 1200);
+        }
+
+        // Escape gives up an in-progress note without leaving the field focused;
+        // blurring is what commits it, so the value is kept either way.
+        document.addEventListener('keydown', function(e) {
+            if (e.key !== 'Escape') return;
+            if (document.activeElement?.classList?.contains('rerun-note-field')) {
+                document.activeElement.blur();
+            }
+        });
+
+        // Flag to track if initial data has been loaded
+        let initialDataLoaded = false;
+
+        // localStorage stores UTF-16, so a payload costs ~2 bytes per JSON
+        // character against a browser quota that is typically ~5MB. At roughly
+        // 460 bytes of JSON per experiment that ceiling arrives near 5,000
+        // experiments -- well within reach of a real import.
+        function isQuotaError(e) {
+            return e instanceof DOMException && (
+                e.name === 'QuotaExceededError'
+                // Firefox's legacy name, still reported by some versions.
+                || e.name === 'NS_ERROR_DOM_QUOTA_REACHED'
+                || e.code === 22
+                || e.code === 1014
+            );
+        }
+
+        function approxStoredMB(serialized) {
+            // x2 for UTF-16 storage; the figure is for the user's benefit, so
+            // one decimal place is plenty.
+            return ((serialized.length * 2) / (1024 * 1024)).toFixed(1);
+        }
+
+        // Explains a failed persist without claiming the import itself failed --
+        // the table on screen is correct either way.
+        function warnNotPersisted(count, detail) {
+            alert(
+                `Imported ${count} experiments, but saving them in this browser failed (${detail}).\n\n`
+                + 'The table below is correct, but this import will not be restored when you reload the page.'
+            );
+        }
+
+        // Resolves true when the import was fully persisted. A false resolution
+        // means the table on screen is correct but will not survive a reload.
+        async function saveImportConfig(platform, opts = {}) {
+            // The bulk payload goes first. If it cannot be stored there is no
+            // point writing the small keys: a platform marker with no mapped
+            // data just sends the next load down the "settings found, no data"
+            // path, and stale metadata would outlive the import it describes.
+            if (opts.mappedData) {
+                const count = Array.isArray(opts.mappedData) ? opts.mappedData.length : 0;
+                try {
+                    await idbSet(IDB_IMPORT_KEY, opts.mappedData);
+                    // A previous small import may still sit in localStorage.
+                    localStorage.removeItem(IMPORT_MAPPED_DATA_KEY);
+                } catch (error) {
+                    console.warn('IndexedDB unavailable, falling back to localStorage:', error.message);
+                    const serialized = JSON.stringify(opts.mappedData);
+                    try {
+                        localStorage.setItem(IMPORT_MAPPED_DATA_KEY, serialized);
+                    } catch (e) {
+                        // Clear rather than leave a half-written or previous import
+                        // behind; the next load then falls back cleanly.
+                        clearImportConfig();
+                        if (isQuotaError(e)) {
+                            console.warn('Import exceeded localStorage quota:', e.message);
+                            warnNotPersisted(count,
+                                `about ${approxStoredMB(serialized)} MB is over this browser's ~5 MB limit, `
+                                + 'and IndexedDB is not available');
+                        } else {
+                            warnNotPersisted(count, e.message);
+                        }
+                        return false;
+                    }
+                }
+            }
+
+            try {
+                localStorage.setItem(IMPORT_PLATFORM_KEY, platform);
+                localStorage.setItem(IMPORT_TIMESTAMP_KEY, Date.now().toString());
+                if (opts.accountId) localStorage.setItem(IMPORT_ACCOUNT_ID_KEY, opts.accountId);
+                if (opts.apiKey) {
+                    sessionStorage.setItem(IMPORT_API_KEY_KEY, opts.apiKey);
+                    localStorage.removeItem(IMPORT_API_KEY_KEY);
+                }
+                console.log('Import config saved:', platform);
+                return true;
+            } catch (e) {
+                clearImportConfig();
+                console.warn('Failed to save import config to localStorage:', e.message);
+                warnNotPersisted(
+                    Array.isArray(opts.mappedData) ? opts.mappedData.length : 0,
+                    e.message
+                );
+                return false;
+            }
+        }
+
+        function getSavedApiKey() {
+            const apiKey = sessionStorage.getItem(IMPORT_API_KEY_KEY);
+            const legacyApiKey = localStorage.getItem(IMPORT_API_KEY_KEY);
+            if (legacyApiKey) localStorage.removeItem(IMPORT_API_KEY_KEY);
+            return apiKey || legacyApiKey;
+        }
+
+        // Async because the bulk payload lives in IndexedDB. Callers that do not
+        // need to wait can ignore the promise; the localStorage keys are already
+        // gone by the time it returns.
+        function clearImportConfig() {
+            localStorage.removeItem(IMPORT_PLATFORM_KEY);
+            localStorage.removeItem(IMPORT_ACCOUNT_ID_KEY);
+            localStorage.removeItem(IMPORT_API_KEY_KEY);
+            localStorage.removeItem(IMPORT_TIMESTAMP_KEY);
+            localStorage.removeItem(IMPORT_MAPPED_DATA_KEY);
+            sessionStorage.removeItem(IMPORT_API_KEY_KEY);
+            // Also clear any legacy CSV content that may exist
+            localStorage.removeItem('last_import_csv');
+            return idbDelete(IDB_IMPORT_KEY).catch(error => {
+                console.warn('Could not clear IndexedDB import data:', error.message);
+            });
+        }
+
+        // Fetch GrowthBook data using proper mapper (shared by modal import + cache restore)
+        async function fetchGrowthBookData(apiKey, apiHost) {
+            const host = apiHost || (typeof config !== 'undefined' ? config.apiHost : 'https://api.growthbook.io');
+            try {
+                const filteredExperiments = await GrowthBookMapper.fetchExperiments(host, apiKey);
+
+                // Save to cache for reload persistence (background; saveToCache
+                // reports a failed save itself).
+                saveToCache(filteredExperiments)
+                    .catch(error => console.error('Could not cache GrowthBook data:', error));
+
+                const mappedExperiments = GrowthBookMapper.mapExperiments(filteredExperiments);
+                refreshUI(mappedExperiments);
+                console.log('GrowthBook Experiments (Mapped):', mappedExperiments.length, 'experiments');
+            } catch (error) {
+                console.error('GrowthBook API Error:', error);
+                alert(`Failed to fetch GrowthBook data: ${error.message}\nFalling back to dummy data.`);
+                dataSourceToggle.checked = false;
+                isUsingApiData = false;
+                clearImportConfig();
+                loadData(true);
+            }
+        }
+
+        // Reads the bulk payload from IndexedDB, falling back to a payload left
+        // in localStorage by an older version (and migrating it across on the way).
+        async function readStoredImportData() {
+            try {
+                const stored = await idbGet(IDB_IMPORT_KEY);
+                if (Array.isArray(stored) && stored.length > 0) return stored;
+            } catch (error) {
+                console.warn('Could not read import data from IndexedDB:', error.message);
+            }
+
+            const legacy = localStorage.getItem(IMPORT_MAPPED_DATA_KEY);
+            if (!legacy) return null;
+            try {
+                const parsed = JSON.parse(legacy);
+                if (!Array.isArray(parsed) || parsed.length === 0) return null;
+                // Move it into IndexedDB so the localStorage ceiling stops applying.
+                idbSet(IDB_IMPORT_KEY, parsed)
+                    .then(() => localStorage.removeItem(IMPORT_MAPPED_DATA_KEY))
+                    .catch(() => {});
+                return parsed;
+            } catch (error) {
+                console.warn('Ignoring unreadable legacy import data:', error.message);
+                return null;
+            }
+        }
+
+        async function loadFromImportCache() {
+            try {
+                const platform = localStorage.getItem(IMPORT_PLATFORM_KEY);
+                if (!platform) return false;
+
+                const timestamp = localStorage.getItem(IMPORT_TIMESTAMP_KEY);
+                const cacheDate = timestamp ? new Date(parseInt(timestamp)).toLocaleString() : 'unknown';
+
+                if (platform === 'csv') {
+                    const accountId = localStorage.getItem(IMPORT_ACCOUNT_ID_KEY) || '';
+                    const parsedData = await readStoredImportData();
+
+                    if (parsedData) {
+                        refreshUI(parsedData);
+                        dataSourceToggle.checked = true;
+                        if (accountId) csvAccountId.value = accountId;
+                        console.log(`Restored Convert CSV import from cache (${cacheDate}):`, parsedData.length, 'experiments');
+                        return true;
+                    }
+
+                    if (accountId) csvAccountId.value = accountId;
+                    dataSourceToggle.checked = false;
+                    console.log(`CSV import settings found from cache (${cacheDate}), but no mapped data was cached; loading dummy data instead.`);
+                    return false;
+                } else if (platform === 'growthbook') {
+                    const apiKey = getSavedApiKey();
+                    if (!apiKey) return false;
+
+                    apiConfig.platform = platform;
+                    apiConfig.apiKey = apiKey;
+                    isUsingApiData = true;
+                    dataSourceToggle.checked = true;
+                    // Trigger async fetch — will update table when done
+                    fetchGrowthBookData(apiKey);
+                    console.log(`Restored GrowthBook import from cache (${cacheDate})`);
+                    return true;
+                } else {
+                    const apiKey = getSavedApiKey();
+                    if (!apiKey) return false;
+
+                    // Restore API config and trigger fetch
+                    apiConfig.platform = platform;
+                    apiConfig.apiKey = apiKey;
+                    isUsingApiData = true;
+                    dataSourceToggle.checked = true;
+                    loadData(true);
+                    console.log(`Restored API import config from cache (${cacheDate}): platform=${platform}`);
+                    return true;
+                }
+            } catch (error) {
+                console.error('Error loading import cache:', error);
+                // refreshUI() may have already flagged the load as done before
+                // throwing; reset so the dummy-data fallback can still run.
+                initialDataLoaded = false;
+            }
+            return false;
+        }
+
+        // Load from cache on page load
+        // Same shape as readStoredImportData: IndexedDB first, then migrate any
+        // payload an older version left in localStorage.
+        async function readStoredGrowthBookCache() {
+            try {
+                const stored = await idbGet(IDB_GROWTHBOOK_KEY);
+                if (Array.isArray(stored) && stored.length > 0) return stored;
+            } catch (error) {
+                console.warn('Could not read GrowthBook cache from IndexedDB:', error.message);
+            }
+
+            const legacy = localStorage.getItem(CACHE_KEY);
+            if (!legacy) return null;
+            try {
+                const parsed = JSON.parse(legacy);
+                if (!Array.isArray(parsed) || parsed.length === 0) return null;
+                idbSet(IDB_GROWTHBOOK_KEY, parsed)
+                    .then(() => localStorage.removeItem(CACHE_KEY))
+                    .catch(() => {});
+                return parsed;
+            } catch (error) {
+                console.warn('Ignoring unreadable legacy GrowthBook cache:', error.message);
+                return null;
+            }
+        }
+
+        async function loadFromCache() {
+            try {
+                const cacheTimestamp = localStorage.getItem(CACHE_TIMESTAMP_KEY);
+                const filteredExperiments = cacheTimestamp ? await readStoredGrowthBookCache() : null;
+
+                if (filteredExperiments) {
+                    // Map the experiments using GrowthBook mapper
+                    const mappedExperiments = GrowthBookMapper.mapExperiments(filteredExperiments);
+
+                    // A stale or malformed cache maps to nothing. Treat that as a
+                    // miss so the dummy data still loads instead of an empty table.
+                    if (!mappedExperiments || mappedExperiments.length === 0) {
+                        console.warn('Ignoring empty/unusable GrowthBook cache; falling back to default data.');
+                        return false;
+                    }
+
+                    refreshUI(mappedExperiments);
+                    console.log('GrowthBook Experiments (from cache):', mappedExperiments.length, 'experiments');
+                    dataSourceToggle.checked = true;
+
+                    return true;
+                }
+            } catch (error) {
+                console.error('Error loading from cache:', error);
+                // refreshUI() may have already flagged the load as done before
+                // throwing; reset so the dummy-data fallback can still run.
+                initialDataLoaded = false;
+            }
+            return false;
+        }
+
+        // Try loading from cache before loading data.json
+        // Priority: GrowthBook API cache > last import cache > dummy data
+        // IndexedDB is async, so restoring no longer happens while this script is
+        // still executing; the dummy-data fallback moved into the chain below.
+        const restoreInitialData = (async () => {
+            if (await loadFromCache()) return true;
+            return loadFromImportCache();
+        })();
+
+        // Load data based on current toggle state
+        function loadData(force = false) {
+            // Skip if cache was already loaded
+            if (initialDataLoaded && !force) {
+                return;
+            }
+
+            if (isUsingApiData) {
+                const platformConfig = PLATFORM_REGISTRY[apiConfig.platform];
+                const endpoint = platformConfig?.endpoint;
+
+                if (!endpoint) {
+                    alert('Invalid platform configuration');
+                    return;
+                }
+
+                // Make API call with authorization header
+                fetch(endpoint, {
+                    headers: {
+                        'Authorization': `Bearer ${apiConfig.apiKey}`,
+                        'Content-Type': 'application/json'
+                    }
+                })
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error(`API returned ${response.status}: ${response.statusText}`);
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        refreshUI(mapApiPayload(apiConfig.platform, data));
+                    })
+                    .catch(error => {
+                        console.error('Error loading API data:', error);
+                        // Fallback to dummy data on error
+                        alert(`Failed to load API data: ${error.message}\nFalling back to dummy data.`);
+                        dataSourceToggle.checked = false;
+                        isUsingApiData = false;
+                        loadData(true);
+                    });
+            } else {
+                // Load dummy data from JSON file
+                fetch('data.json')
+                    .then(response => response.json())
+                    .then(data => {
+                        refreshUI(data);
+                    })
+                    .catch(error => {
+                        console.error('Error loading dummy data:', error);
+                        showFileProtocolWarning();
+                    });
+            }
+        }
+
+        // fetch() of a local file is blocked by browsers under file://, which is
+        // the only reason this app's data load would fail out of the box. Point
+        // people at the fix instead of leaving them looking at an empty table.
+        // This lives as a banner outside #tableBody (rather than a row inside it)
+        // because tab switches call renderView(), which clears and repopulates
+        // tableBody and would otherwise wipe the message on the next click.
+        function showFileProtocolWarning() {
+            if (window.location.protocol !== 'file:') {
+                return;
+            }
+            document.getElementById('fileProtocolNotice').style.display = 'block';
+        }
+
+        // Initial data load - skipped if cache or import settings restored data.
+        restoreInitialData
+            .catch(error => {
+                console.error('Error restoring saved data:', error);
+                // A failed restore may have flagged the load as done; reset so the
+                // dummy-data fallback still runs.
+                initialDataLoaded = false;
+                return false;
+            })
+            .then(restored => {
+                if (restored) {
+                    console.log('Data restored from cache or import settings; skipping dummy data load');
+                } else {
+                    loadData();
+                }
+            });
+
+        // Sub-rows need no reattaching: ordering is a property of the flattened
+        // view rows, so a sort can never separate a family.
+        function sortTable(column, type) {
+            // Re-rendering discards any open panel; note strips are rebuilt once
+            // the new order is settled.
+            commitOpenNotesField();
+            const headers = document.querySelectorAll('th.sortable');
+
+            // Clicking the same header again advances one step through the cycle;
+            // a different header starts it over. Falling off the end resets.
+            const step = currentSort.column === column
+                ? SORT_CYCLE[SORT_CYCLE.findIndex(
+                    ([m, d]) => m === currentSort.mode && d === currentSort.direction) + 1]
+                : SORT_CYCLE[0];
+            const [mode = null, direction = null] = step || [];
+
+            // Clear all header states
+            headers.forEach(h => h.classList.remove('asc', 'desc', 'grouped-asc', 'grouped-desc'));
+
+            // A new order makes the current page arbitrary, so restart at page 1.
+            view.page = 0;
+
+            if (mode) {
+                currentSort = { column, direction, mode };
+                renderView();
+                const activeHeader = document.querySelector(`th[data-column="${column}"]`);
+                if (activeHeader) {
+                    activeHeader.classList.add(mode === 'grouped' ? 'grouped-' + direction : direction);
+                }
+            } else {
+                // Reset back to the tab's grouped default
+                const activeTab = document.querySelector('.tab.active');
+                if (activeTab?.dataset.tab === 'rerun') {
+                    currentSort = { column: null, direction: null, mode: null };
+                    renderView('rerun');
+                    updateTitle('rerun');
+                } else if (activeTab) {
+                    sortByHighlighted(activeTab.dataset.tab);
+                } else {
+                    currentSort = { column: null, direction: null, mode: null };
+                    renderView();
+                }
+            }
+
+            // Sort mode changed → show/hide the highlight navigator accordingly
+            updateHighlightNav();
+        }
+
+        // Attach event listeners to sortable headers
+        document.querySelectorAll('th.sortable').forEach(header => {
+            header.addEventListener('click', function() {
+                const column = this.dataset.column;
+                const type = this.dataset.type;
+                sortTable(column, type);
+            });
+        });
+
+        // Store (or clear) a row's change notes and persist them with the selection.
+        function saveRerunNotes(key, text) {
+            if (!key) return;
+            updateDetail(key, { notes: (text || '').trim() });
+            saveRerunSelection();
+        }
+
+        // Apply a select/deselect decision for one row's rerun button to all
+        // the shared selection state, then refresh the bits of UI that depend on it.
+        function setRowRerunSelected(row, selected) {
+            const key = row.dataset.selectionKey;
+            const activeTab = getActiveTabType();
+            const onRerunTab = activeTab === 'rerun';
+            if (key) {
+                if (selected) {
+                    selectedRerunKeys.add(key);
+                    rerunForgivenKeys.delete(key);
+                    // Remember which scenario tab this came from (not 'rerun' itself).
+                    if (!onRerunTab) updateDetail(key, { origin: activeTab });
+                } else {
+                    selectedRerunKeys.delete(key);
+                    // Stay put in the Rerun list (in place) until a hard refresh.
+                    if (onRerunTab) rerunForgivenKeys.add(key);
+                }
+            }
+            // The shared state is already updated, so the row can be restyled
+            // from it rather than from the flag -- same four steps either way.
+            applySelectionState(row);
+            updateRerunTabCount();
+            saveRerunSelection();
+            if (onRerunTab) {
+                // Re-renders, which rebuilds the note fields as a side effect.
+                applyTableVisibility('rerun');
+                updateTitle('rerun');
+                updateSummaryForTab('rerun');
+            } else {
+                // Elsewhere the table is not re-rendered, so add or drop this
+                // row's note field in place.
+                syncRerunNoteRows();
+            }
+        }
+
+        function attachCheckboxListeners() {
+            document.querySelectorAll('.rerun-row-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    toggleRerunExpansion(this.closest('tr'));
+                });
+            });
+            document.querySelectorAll('.rerun-menu-btn').forEach(btn => {
+                btn.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    toggleRowActionMenu(this);
+                });
+            });
+        }
+
+        // --- Row overflow menu -------------------------------------------------
+        // One menu element is open at a time, appended next to its button. Items
+        // are built per row so "View Report" can be omitted when the row has no
+        // report URL, and the rerun item can name what it will do.
+        let openRowMenuBtn = null;
+
+        function closeRowActionMenu() {
+            document.querySelectorAll('.row-action-menu').forEach(el => el.remove());
+            openRowMenuBtn?.setAttribute('aria-expanded', 'false');
+            openRowMenuBtn?.classList.remove('menu-open');
+            openRowMenuBtn = null;
+        }
+
+        function buildRowActionMenu(row) {
+            const isSelected = selectedRerunKeys.has(row.dataset.selectionKey);
+            const reportUrl = row.dataset.reportUrl || '';
+            const menu = document.createElement('div');
+            menu.className = 'row-action-menu';
+            menu.setAttribute('role', 'menu');
+            menu.innerHTML = `
+                ${reportUrl ? `
+                <a href="${reportUrl}" target="_blank" rel="noopener" class="row-action-item" role="menuitem">
+                    <span class="row-action-label">View Report</span>
+                </a>` : `
+                <span class="row-action-item row-action-disabled" role="menuitem" aria-disabled="true">
+                    <span class="row-action-label">View Report</span>
+                    <span class="row-action-hint">No report URL</span>
+                </span>`}
+                <button type="button" class="row-action-item" role="menuitem" data-action="rerun">
+                    <img src="images/iconRerun.svg" alt="" class="row-action-icon">
+                    <span class="row-action-label">${isSelected ? 'Edit Rerun Notes' : 'Add To Rerun List'}</span>
+                </button>
+                ${isSelected ? `
+                <button type="button" class="row-action-item" role="menuitem" data-action="view-rerun">
+                    <img src="images/iconRerun_Sel.svg" alt="" class="row-action-icon">
+                    <span class="row-action-label">View In Rerun List</span>
+                </button>` : ''}`;
+            return menu;
+        }
+
+        function toggleRowActionMenu(btn) {
+            const wasOpen = openRowMenuBtn === btn;
+            closeRowActionMenu();
+            if (wasOpen) return;
+
+            const row = btn.closest('tr');
+            if (!row) return;
+
+            const menu = buildRowActionMenu(row);
+            btn.after(menu);
+            openRowMenuBtn = btn;
+            btn.setAttribute('aria-expanded', 'true');
+            btn.classList.add('menu-open');
+        }
+
+        // Menu items: the report link navigates on its own; the rest act on the row.
+        tableBody.addEventListener('click', function(e) {
+            const item = e.target.closest('.row-action-item');
+            if (!item) return;
+            const row = item.closest('tr');
+            const action = item.dataset.action;
+            if (action) e.stopPropagation();
+            closeRowActionMenu();
+            if (!row || !action) return;
+            if (action === 'rerun') toggleRerunExpansion(row);
+            if (action === 'view-rerun') showRowOnRerunTab(row);
+        });
+
+        document.addEventListener('mousedown', function(e) {
+            if (!openRowMenuBtn) return;
+            if (e.target.closest('.row-action-menu, .rerun-menu-btn')) return;
+            closeRowActionMenu();
+        });
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && openRowMenuBtn) closeRowActionMenu();
+        });
+
+        // Column count for the full-width note cell and the tag row. Read from the
+        // header so it stays right if a column is ever added or removed.
+        function tableColumnCount() {
+            return tableBody.closest('table').querySelectorAll('thead th').length;
+        }
+
+        // Any row on the rerun list carries its tag row and notes field, open and
+        // editable, on whichever tab it is shown. Both are rebuilt from scratch on
+        // each sync: they are presentation only, so there is no state in them
+        // worth preserving across a refresh.
+        function syncRerunNoteRows() {
+            document.querySelectorAll('.rerun-note-row, .rerun-tag-row').forEach(el => el.remove());
+
+            const colspan = tableColumnCount();
+            document.querySelectorAll('#tableBody tr:not(.rerun-note-row):not(.rerun-tag-row)')
+                .forEach(row => {
+                    const key = row.dataset.selectionKey;
+                    // Context rows (a parent shown only because a comparison of
+                    // its is listed) are not themselves on the list, so they get
+                    // no field of their own.
+                    if (!key || !selectedRerunKeys.has(key)) return;
+
+                    const isSubRow = row.classList.contains('sub-row');
+                    const field = el('textarea', {
+                        class: 'rerun-note-field',
+                        rows: 2,
+                        placeholder: 'What would you change? Notes on the hypothesis, variation, or audience for the rerun\u2026',
+                        // .value, not innerHTML: notes are free text typed by the user.
+                        value: detailFor(key).notes || '',
+                        dataset: { selectionKey: key }
+                    });
+
+                    // Notes and picker share a row: the field takes the space
+                    // that is left, the picker sits at the right end of it.
+                    const noteRow = el('tr', { class: 'rerun-note-row' + (isSubRow ? ' sub-row-note' : '') },
+                        el('td', { colSpan: colspan },
+                            el('div', { class: 'rerun-note-layout' }, [field, buildRerunTypePicker(key)])));
+
+                    // Tags first, then the notes field, both under their row.
+                    row.after(buildRerunTagRow(key, isSubRow));
+                    row.nextElementSibling.after(noteRow);
+                    // Size to the text it already holds, now that it is in the
+                    // document and has a width to wrap against.
+                    autoGrowNotesField(field);
+                });
+        }
+
+        // A tagged name links to the row's place in the Rerun list. Names on
+        // untagged rows are inert text, so the guard is the link class.
+        tableBody.addEventListener('click', function(e) {
+            const name = e.target.closest('.experiment-name-link');
+            if (!name) return;
+            const row = name.closest('tr');
+            if (row) showRowOnRerunTab(row);
+        });
+
+        // Keyboard equivalent, since the tagged name is a span acting as a link.
+        tableBody.addEventListener('keydown', function(e) {
+            if (e.key !== 'Enter' && e.key !== ' ') return;
+            const name = e.target.closest('.experiment-name-link');
+            if (!name) return;
+            e.preventDefault();
+            const row = name.closest('tr');
+            if (row) showRowOnRerunTab(row);
+        });
+
+        // A note grows with what you type instead of scrolling inside a fixed box.
+        // Height is reset to auto first so the field can shrink again on deletion;
+        // scrollHeight then reports the height the content actually needs.
+        function autoGrowNotesField(field) {
+            if (!field) return;
+            field.style.height = 'auto';
+            field.style.height = field.scrollHeight + 'px';
+        }
+
+        tableBody.addEventListener('input', function(e) {
+            const field = e.target.closest('.rerun-note-field');
+            if (field) autoGrowNotesField(field);
+        });
+
+        // Tags toggle in place: no re-render, so the notes field keeps focus and
+        // whatever is half-typed in it.
+        tableBody.addEventListener('click', function(e) {
+            const btn = e.target.closest('.rerun-tag');
+            if (!btn) return;
+            e.stopPropagation();
+            setTagPressed(btn, toggleRerunTag(btn.dataset.selectionKey, btn.dataset.tagId));
+        });
+
+        // Rerun-tab note fields are edited in place, so they commit on blur
+        // rather than when a panel closes. Delegated: the fields are rebuilt on
+        // every render.
+        // Choosing a type redraws only its own diagram, so the notes field beside
+        // it keeps focus and anything half-typed in it.
+        tableBody.addEventListener('change', function(e) {
+            const select = e.target.closest('.rerun-type-select');
+            if (!select) return;
+            const key = select.dataset.selectionKey;
+            setRerunType(key, select.value);
+
+            select.classList.toggle('is-set', select.value !== DEFAULT_RERUN_TYPE);
+
+            const picker = select.closest('.rerun-type-picker');
+            if (!picker) return;
+            const type = RERUN_TYPE_BY_ID.get(select.value);
+
+            const description = picker.querySelector('.rerun-type-description');
+            if (description) description.textContent = type ? type.description : '';
+
+            const preview = picker.querySelector('.rerun-type-preview');
+            if (!preview) return;
+            preview.innerHTML = '';
+            if (type) preview.appendChild(buildVariantDiagram(type));
+        });
+
+        tableBody.addEventListener('focusout', function(e) {
+            const field = e.target.closest('.rerun-note-field');
+            if (!field) return;
+            const key = field.dataset.selectionKey;
+            if (key) saveRerunNotes(key, field.value);
+        });
+
+        // Typing in a note field must not bubble up to the row-click handler and
+        // move the highlight navigator's reference.
+        tableBody.addEventListener('click', function(e) {
+            if (e.target.closest('.rerun-note-field')) e.stopPropagation();
+        }, true);
+
+        // Clicking a row's button expands the panel under it (or collapses it if
+        // it's already the open one). Removal stays an explicit action inside the
+        // panel, so a stray click can never silently drop a row from the list.
+        // The row icon behaves like a checkbox: click it to put the experiment on
+        // the rerun list, click again to take it off. Adding also opens the notes
+        // panel so a reason can be typed straight away, but the selection is
+        // already committed -- the panel confirms nothing.
+        function toggleRerunExpansion(row) {
+            if (!row) return;
+            closeRowActionMenu();
+
+            const key = row.dataset.selectionKey;
+            const wasSelected = selectedRerunKeys.has(key);
+
+            // Whatever panel is open belongs to the previous row; commit its notes
+            // before this click rearranges the table.
+            commitOpenNotesField();
+
+            if (wasSelected) {
+                // Deselecting drops the notes, tags and type. The origin tab is
+                // kept, so a row re-added from the Rerun tab still shows where
+                // it first came from.
+                const { origin } = detailFor(key);
+                rerunDetails.delete(key);
+                if (origin) updateDetail(key, { origin });
+                setRowRerunSelected(row, false);
+                return;
+            }
+
+            setRowRerunSelected(row, true);
+            // Selecting is all it takes: setRowRerunSelected() re-syncs the note
+            // fields, so the row's field is already open below it. Put the cursor
+            // in it so a reason can be typed straight away.
+            focusNotesFieldFor(row);
+        }
+
+        // Move focus into the notes field belonging to a row, if it has one.
+        function focusNotesFieldFor(row) {
+            // The tag row sits between a row and its notes field, so walk the
+            // siblings that belong to this row rather than assuming the next one.
+            let el = row.nextElementSibling;
+            let field = null;
+            while (el && (el.classList.contains('rerun-tag-row') || el.classList.contains('rerun-note-row'))) {
+                field = el.querySelector('.rerun-note-field') || field;
+                el = el.nextElementSibling;
+            }
+            if (!field) return;
+            field.focus();
+            field.setSelectionRange(field.value.length, field.value.length);
+        }
+
+        // Notes fields live under their rows and commit on blur, so there is no
+        // panel to close. Kept as the one place that flushes a field still holding
+        // focus -- called before anything that re-renders or re-orders the table.
+        function commitOpenNotesField() {
+            const field = document.activeElement;
+            if (!field || !field.classList?.contains('rerun-note-field')) return;
+            const key = field.dataset.selectionKey;
+            if (key && selectedRerunKeys.has(key)) saveRerunNotes(key, field.value);
+        }
+
+        // Show a small count badge on the Rerun tab when tests are selected
+        function updateRerunTabCount() {
+            const badge = document.getElementById('rerunTabCount');
+            if (!badge) return;
+            const count = selectedRerunKeys.size;
+            badge.textContent = count;
+            badge.style.display = count > 0 ? '' : 'none';
+        }
+
+        // How many rows each scenario tab would highlight, counted over the whole
+        // dataset rather than the rendered page. One pass for all tabs: each row
+        // is tested against every tab's predicate once.
+        function updateTabCountBadges() {
+            const badges = document.querySelectorAll('.tab-count-badge');
+            if (!badges.length) return;
+
+            const counts = {};
+            badges.forEach(badge => { counts[badge.dataset.countFor] = 0; });
+
+            view.rows.forEach(viewRow => {
+                Object.keys(counts).forEach(tabType => {
+                    if (rowMatchesTab(viewRow, tabType)) counts[tabType]++;
+                });
+            });
+
+            badges.forEach(badge => {
+                const count = counts[badge.dataset.countFor] || 0;
+                badge.textContent = count;
+                badge.style.display = count > 0 ? '' : 'none';
+            });
+        }
+
+        // Initialize checkbox listeners
+        attachCheckboxListeners();
+
+        function getActiveTabType() {
+            return document.querySelector('.tab.active')?.dataset.tab || 'almost-significant';
+        }
+
+        // Counts come from the data so they cover the whole selection, not just
+        // whatever happens to be on the rendered page.
+        function selectedRerunRows() {
+            return view.rows.filter(viewRow => selectedRerunKeys.has(viewRow.selectionKey));
+        }
+
+        function selectedRerunExperiments() {
+            const selected = [];
+
+            calculatedExperimentsData.forEach(experiment => {
+                if (selectedRerunKeys.has(experimentSelectionKey(experiment))) {
+                    selected.push(experiment);
+                }
+
+                if (!Array.isArray(experiment.additionalComparisons)) return;
+
+                experiment.additionalComparisons.forEach(comparison => {
+                    if (!selectedRerunKeys.has(comparisonSelectionKey(experiment, comparison))) return;
+                    selected.push({
+                        ...comparison,
+                        id: comparisonSelectionKey(experiment, comparison),
+                        name: `${experiment.name || 'Untitled'} vs. ${comparison.variationName || 'variation'}`,
+                        iterations: experiment.iterations || 0
+                    });
+                });
+            });
+
+            return selected;
+        }
+
+        function updateSummaryForTab(tabType = getActiveTabType()) {
+            updateSummaryBar(tabType === 'rerun'
+                ? selectedRerunExperiments()
+                : calculatedExperimentsData);
+        }
+
+        // Takes a view row rather than a <tr>, so it can answer for rows that are
+        // not currently rendered.
+        function rowVisibleInRerun(viewRow) {
+            const key = viewRow.selectionKey;
+            if (selectedRerunKeys.has(key)) return true;
+            if (rerunForgivenKeys.has(key)) return true;
+            if (viewRow.kind === 'sub') return false;
+
+            // A parent stays visible while any of its comparisons is on the list.
+            return viewRow.children.some(child =>
+                selectedRerunKeys.has(child.selectionKey)
+                || rerunForgivenKeys.has(child.selectionKey));
+        }
+
+        // Search and tab filtering now happen in the data pipeline, so making a
+        // row "visible" means rendering the page that contains it. Filtering
+        // changes the result set, so go back to page 1.
+        function applyTableVisibility(tabType = getActiveTabType()) {
+            view.page = 0;
+            renderView(tabType);
+        }
+
+        // Whether a row's decision satisfies a tab's editable decisionFilter.
+        // 'Either' turns the filter off; otherwise the row's decision (blank
+        // counts as not shipped) must equal the chosen value.
+        function decisionMatches(decision, filterValue) {
+            if (filterValue === 'Either') return true;
+            const isShipped = decision === 'Shipped';
+            return filterValue === 'Shipped' ? isShipped : !isShipped;
+        }
+
+        // True when the primary effect and secondary effect point the same way
+        // (both up or both down). `secondary` is the rendered string, e.g. "+3% ...".
+        function sameDirection(metric, secondary) {
+            const primary = Number(metric);
+            const str = (secondary || '').trim();
+            if (!Number.isFinite(primary) || primary === 0 || str === '') return false;
+            const secondaryUp = str.startsWith('+');
+            const secondaryDown = str.startsWith('-') || str.startsWith('−');
+            if (!secondaryUp && !secondaryDown) return false;
+            return (primary > 0) === secondaryUp;
+        }
+
+        // Light the individual signal cells inside a matching row for tabs that
+        // declare `signals`. Adds `.signal-on` to each cell whose predicate fires,
+        // leaving cell/number positions untouched.
+        // (SIGNAL_CELLS declared near the top; see the startup-ordering note.)
+
+        function applySignals(row, config, rowData) {
+            row.querySelectorAll('.signal-on').forEach(el => el.classList.remove('signal-on'));
+            if (!config?.signals) return;
+            Object.entries(config.signals).forEach(([key, test]) => {
+                if (!test(rowData, config.params || {})) return;
+                const cell = row.querySelector(SIGNAL_CELLS[key]);
+                if (cell) cell.classList.add('signal-on');
+            });
+        }
+
+        // Counts describe the whole dataset, not the rendered page.
+        function countMatchingExperiments(tabType) {
+            return {
+                matchCount: view.rows.filter(row => rowMatchesTab(row, tabType)).length,
+                totalCount: view.rows.filter(row => row.kind === 'parent').length
+            };
+        }
+
+        // Function to update title and subtitle based on tab
+        function updateTitle(tabType) {
+            const scenarioTitle = document.querySelector('.scenario-title');
+            const subtitle = document.querySelector('.subtitle');
+            const { matchCount, totalCount } = countMatchingExperiments(tabType);
+            const config = TAB_CONFIG[tabType];
+
+            if (!config) return;
+            scenarioTitle.textContent = config.title;
+            if (tabType === 'rerun') {
+                const selectedCount = selectedRerunRows().length;
+                subtitle.textContent = selectedCount > 0
+                    ? `${selectedCount} test${selectedCount === 1 ? '' : 's'} selected for reruning or replication.`
+                    : config.subtitle;
+                return;
+            }
+            subtitle.textContent = totalCount > 0 && config.countSubtitle
+                ? config.countSubtitle(matchCount, totalCount)
+                : config.subtitle;
+        }
+
+        // Sort highlighted rows to the top using tab's default column (metric) and direction
+        // Sets the tab's default ordering. Does not render on its own -- callers
+        // render once after the rest of the tab state is settled.
+        function sortByHighlighted(tabType) {
+            const direction = TAB_CONFIG[tabType]?.sortDirection || 'desc';
+            currentSort = { column: 'metric', direction, mode: 'grouped' };
+
+            // Update column header indicators
+            const headers = document.querySelectorAll('th.sortable');
+            headers.forEach(h => h.classList.remove('asc', 'desc', 'grouped-asc', 'grouped-desc'));
+            const metricHeader = document.querySelector('th[data-column="metric"]');
+            if (metricHeader) metricHeader.classList.add('grouped-' + direction);
+        }
+
+        // Switching tabs changes ordering, filtering and highlighting together.
+        // Each is decided from the data; one render applies the result.
+        function updateHighlighting(tabType) {
+            // A different tab means a different result set, so restart at page 1.
+            view.page = 0;
+
+            if (tabType !== 'rerun') {
+                // Sort highlighted rows to the top, with tab-specific ordering
+                sortByHighlighted(tabType);
+            }
+
+            renderView(tabType);
+            updateTitle(tabType);
+            updateSummaryForTab(tabType);
+
+            // Refresh the floating highlight navigator for the new highlight set
+            updateHighlightNav();
+        }
+
+        // ---- Highlight navigator: jump between highlighted rows ----
+        // Shown whenever highlighted rows are present.
+        // (State declared near the top of the script; see the startup-ordering note.)
+
+        function getHighlightedRows() {
+            // Include highlighted sub-rows (comparison variations) so navigation
+            // reaches them too; DOM order gives natural top-to-bottom traversal.
+            return Array.from(document.querySelectorAll('#tableBody tr.highlighted-row'));
+        }
+
+        function getVisibleTableRows() {
+            return Array.from(document.querySelectorAll('#tableBody tr:not(.rerun-note-row):not(.rerun-tag-row)'))
+                .filter(row => row.style.display !== 'none');
+        }
+
+        function updateHighlightNav() {
+            const nav = document.getElementById('highlightNav');
+            const rows = getHighlightedRows();
+            if (rows.length === 0) {
+                nav.classList.remove('visible');
+                highlightNavIndex = -1;
+                highlightReferenceRow = null;
+                return;
+            }
+            const referencedIndex = highlightReferenceRow ? rows.indexOf(highlightReferenceRow) : -1;
+            if (referencedIndex >= 0) highlightNavIndex = referencedIndex;
+            // Clamp the current index into range (highlight set may have changed)
+            if (highlightNavIndex >= rows.length) highlightNavIndex = rows.length - 1;
+            const shownIndex = highlightNavIndex < 0 ? 1 : highlightNavIndex + 1;
+            document.getElementById('highlightCount').textContent = `${shownIndex} / ${rows.length}`;
+            nav.classList.add('visible');
+        }
+
+        function getHighlightIndexFromReference(rows, delta) {
+            if (!highlightReferenceRow || !highlightReferenceRow.isConnected) return null;
+
+            const exactIndex = rows.indexOf(highlightReferenceRow);
+            if (exactIndex >= 0) {
+                return (exactIndex + delta + rows.length) % rows.length;
+            }
+
+            const visibleRows = getVisibleTableRows();
+            const referencePosition = visibleRows.indexOf(highlightReferenceRow);
+            if (referencePosition < 0) return null;
+
+            const highlightedPositions = rows
+                .map((row, index) => ({ index, position: visibleRows.indexOf(row) }))
+                .filter(item => item.position >= 0)
+                .sort((a, b) => a.position - b.position);
+
+            if (highlightedPositions.length === 0) return null;
+
+            if (delta > 0) {
+                return (highlightedPositions.find(item => item.position > referencePosition)
+                    || highlightedPositions[0]).index;
+            }
+
+            for (let i = highlightedPositions.length - 1; i >= 0; i--) {
+                if (highlightedPositions[i].position < referencePosition) {
+                    return highlightedPositions[i].index;
+                }
+            }
+            return highlightedPositions[highlightedPositions.length - 1].index;
+        }
+
+        // Pulse a row, clearing the class once the animation ends so it can't
+        // linger and override the row's real background (e.g. blue when selected).
+        function pulseHighlightFocus(row) {
+            document.querySelectorAll('#tableBody tr.highlight-focus')
+                .forEach(r => r.classList.remove('highlight-focus'));
+            void row.offsetWidth; // restart the animation
+            row.classList.add('highlight-focus');
+            row.addEventListener('animationend', function handler() {
+                row.classList.remove('highlight-focus');
+                row.removeEventListener('animationend', handler);
+            });
+        }
+
+        // `pulse` is opt-out: clicking a row to act on it (opening the rerun
+        // panel, hitting the overflow menu) should move the navigator's reference
+        // without flashing amber over a row that is turning blue at the same time.
+        function setHighlightReferenceFromRow(row, { pulse = true } = {}) {
+            const rows = getHighlightedRows();
+            if (rows.length === 0) return;
+
+            highlightReferenceRow = row;
+            const exactIndex = rows.indexOf(row);
+            if (exactIndex >= 0) {
+                highlightNavIndex = exactIndex;
+                if (pulse) pulseHighlightFocus(row);
+            }
+            updateHighlightNav();
+        }
+
+        function jumpToHighlight(delta) {
+            const rows = getHighlightedRows();
+            if (rows.length === 0) return;
+            const referencedIndex = getHighlightIndexFromReference(rows, delta);
+            highlightNavIndex = referencedIndex !== null
+                ? referencedIndex
+                : (highlightNavIndex < 0
+                    ? (delta > 0 ? 0 : rows.length - 1)
+                    : (highlightNavIndex + delta + rows.length) % rows.length);
+            const row = rows[highlightNavIndex];
+            highlightReferenceRow = row;
+            // Only scroll if the target row isn't already fully in view — avoids
+            // jitter when the next highlight is already on screen.
+            const rect = row.getBoundingClientRect();
+            const vh = window.innerHeight || document.documentElement.clientHeight;
+            const fullyVisible = rect.top >= 0 && rect.bottom <= vh;
+            if (!fullyVisible) {
+                row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+            // Brief pulse so the target row is easy to spot
+            pulseHighlightFocus(row);
+            document.getElementById('highlightCount').textContent = `${highlightNavIndex + 1} / ${rows.length}`;
+        }
+
+        document.getElementById('highlightPrev').addEventListener('click', () => jumpToHighlight(-1));
+        document.getElementById('highlightNext').addEventListener('click', () => jumpToHighlight(1));
+        tableBody.addEventListener('click', (e) => {
+            const row = e.target.closest('tr');
+            if (!row) return;
+            // Clicks on a row's own controls are actions, not navigation: they
+            // already give their own feedback (the panel opening, the row turning
+            // blue), so they must not also pulse the row amber.
+            const isControl = e.target.closest(
+                '.rerun-row-btn, .rerun-menu-btn, .row-action-menu, .rerun-note-field, '
+                + '.rerun-tag, .rerun-type-picker');
+            setHighlightReferenceFromRow(row, { pulse: !isControl });
+        });
+
+        // Arrow keys navigate highlights when the navigator is visible
+        document.addEventListener('keydown', (e) => {
+            if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+            const nav = document.getElementById('highlightNav');
+            if (!nav.classList.contains('visible')) return;
+            // Don't hijack arrows while typing in an input
+            const tag = (document.activeElement.tagName || '').toLowerCase();
+            if (tag === 'input' || tag === 'textarea') return;
+            e.preventDefault();
+            jumpToHighlight(e.key === 'ArrowDown' ? 1 : -1);
+        });
+
+        // Every element updateSummaryBar() writes, so clearing them is one list.
+        const SUMMARY_FIELDS = [
+            'sensitivityThresholds', 'successRateValue', 'successRateIterValue',
+            'fprValue', 'medianEffectValue', 'medianEffectIterValue'
+        ];
+
+        // Writes one summary figure and its colour band. `bands` is read in order
+        // and the first matching entry wins, so a panel says which way is good
+        // without repeating the set-text / reset-class / add-class dance.
+        function writeSummaryStat(elId, text, { className = 'summary-metric-value', bands = [] } = {}) {
+            const el = document.getElementById(elId);
+            if (!el) return;
+            el.className = className;
+            el.textContent = text == null ? '' : text;
+            if (text == null) return;
+            const band = bands.find(([test]) => test);
+            if (band) el.classList.add(band[1]);
+        }
+
+        function updateSummaryBar(experiments = calculatedExperimentsData) {
+            const MDE_THRESHOLDS = [0.5, 1, 2, 5, 10, 15];
+            const ALPHA = 0.05;
+            const POWER_THRESHOLD = 80;
+            const total = experiments.length;
+
+            if (total === 0) {
+                SUMMARY_FIELDS.forEach(id => {
+                    document.getElementById(id).textContent = '';
+                });
+                return;
+            }
+
+            // 1. Testing Sensitivity
+            const container = document.getElementById('sensitivityThresholds');
+            // % of experiments powered at a given MDE
+            const poweredPctAt = mde => 100 * experiments.filter(exp => {
+                const power = recalculatePower(exp.sampleSize, exp.primaryMetricType, mde, exp.baseRate || 5);
+                return power !== null && power >= POWER_THRESHOLD;
+            }).length / total;
+            // Drive the uniform color off the custom MDE input: the whole histogram
+            // reflects coverage at the user's chosen MDE (low → red, high → green).
+            const selectedMde = getSelectedMde();
+            const uniformColor = sensitivityColor(poweredPctAt(selectedMde));
+            // Build the column list; if the selected MDE isn't a standard threshold,
+            // splice it in at the right sorted position as an extra column.
+            const stdMax = Math.max(...MDE_THRESHOLDS);
+            const columns = MDE_THRESHOLDS.slice();
+            if (!columns.includes(selectedMde)) {
+                columns.push(selectedMde);
+                columns.sort((a, b) => a - b);
+            }
+            container.innerHTML = columns.map(mde => {
+                const mdeLabel = mde === stdMax ? `${mde}%+` : `${mde}%`;
+                const pctRaw = poweredPctAt(mde);
+                const pct = pctRaw >= 10 ? Math.round(pctRaw) : Math.round(pctRaw * 10) / 10;
+                const pctDisplay = pctRaw >= 10 ? pct + '%' : pct.toFixed(1) + '%';
+                // Highlight the column matching the selected MDE
+                const isSelected = mde === selectedMde;
+                const selCls = isSelected ? ' sensitivity-selected' : '';
+                // Selected bar is dark gray; 0% gets a neutral gray fill; the rest
+                // share the uniform coverage color.
+                const isZero = pctRaw < 0.05;
+                const bg = isSelected ? '#333' : (isZero ? '#d0d0d0' : uniformColor);
+                // Bar height encodes the % (min 3px so 0% is still a visible sliver)
+                const barHeight = Math.max(3, Math.round(pctRaw / 100 * 44));
+                // Dim the % number and MDE tick for zero columns; dark for real values
+                const pctColor = isZero ? '#c0c0c0' : '#2c2c2c';
+                const mdeColor = isZero ? '#c0c0c0' : '#2c2c2c';
+                return `<span class="summary-threshold-column${selCls}">
+                    <span class="summary-threshold-bararea">
+                        <span class="summary-threshold-pct" style="color:${pctColor}">${pctDisplay}</span>
+                        <span class="summary-threshold-bar" style="height:${barHeight}px; background-color:${bg}"></span>
+                    </span>
+                    <span class="summary-threshold-label" style="color:${mdeColor}">${mdeLabel}</span>
+                </span>`;
+            }).join('');
+
+            const isSuccess = exp => exp.primaryMetric > 0 && exp.pvalue !== null && exp.pvalue < ALPHA;
+            // A test counts as an iteration only if it's tagged with iterations >= 1.
+            // Untagged tests (no iterations field) are first-time tests.
+            const isIteration = exp => (exp.iterations || 0) >= 1;
+
+            // 2. Success Rate, shown twice: once for first-time tests and once for
+            // those tagged as iterations. Same calculation, different population.
+            const firstTimeExperiments = experiments.filter(exp => !isIteration(exp));
+            const iterExperiments = experiments.filter(isIteration);
+
+            const renderSuccessRate = (elId, exps) => {
+                if (exps.length === 0) {
+                    writeSummaryStat(elId, null);
+                    return;
+                }
+                const rate = Math.round((exps.filter(isSuccess).length / exps.length) * 100);
+                writeSummaryStat(elId, rate + '%', {
+                    bands: [[rate >= 33, 'metric-good'], [rate >= 15, 'metric-warning']]
+                });
+            };
+            renderSuccessRate('successRateValue', firstTimeExperiments);
+            renderSuccessRate('successRateIterValue', iterExperiments);
+
+            // 3. False Positive Risk (Kohavi's Bayesian FPR)
+            // FPR = α(1-π) / (α(1-π) + power×π)
+            // π = prior probability of true effect (overall success rate, all tests)
+            // power = average power across experiments at current MDE
+            const overallSuccessCount = experiments.filter(isSuccess).length;
+            const pi = overallSuccessCount / total; // success probability as prior
+            // Power is stored as a percentage; the formula wants 0-1.
+            const powers = experiments.filter(exp => exp.power !== null).map(exp => exp.power / 100);
+            const powerCount = powers.length;
+            const avgPower = powerCount ? powers.reduce((a, b) => a + b, 0) / powerCount : 0;
+            if (powerCount === 0 || pi === 0) {
+                writeSummaryStat('fprValue', null);
+            } else {
+                const fpr = (ALPHA * (1 - pi)) / (ALPHA * (1 - pi) + avgPower * pi);
+                const fprPct = Math.round(fpr * 100);
+                writeSummaryStat('fprValue', fprPct + '%', {
+                    bands: [[fprPct <= 20, 'metric-good'], [fprPct <= 50, 'metric-warning'],
+                            [true, 'metric-danger']]
+                });
+            }
+
+            // 4. Median Relative Effect — shown inside each Success Rate panel
+            const renderMedian = (elId, exps) => {
+                const MEDIAN_CLASS = 'summary-metric-median-value';
+                const effects = exps
+                    .map(exp => exp.primaryMetric)
+                    .filter(v => v !== null && v !== undefined && !isNaN(v))
+                    .sort((a, b) => a - b);
+                if (effects.length === 0) {
+                    writeSummaryStat(elId, null, { className: MEDIAN_CLASS });
+                    return;
+                }
+                const mid = Math.floor(effects.length / 2);
+                const median = effects.length % 2 !== 0
+                    ? effects[mid]
+                    : (effects[mid - 1] + effects[mid]) / 2;
+                writeSummaryStat(elId, (median > 0 ? '+' : '') + median.toFixed(1) + '%', {
+                    className: MEDIAN_CLASS,
+                    bands: [[median > 0, 'metric-good'], [median < -1, 'metric-danger'],
+                            [true, 'metric-warning']]
+                });
+            };
+            renderMedian('medianEffectValue', firstTimeExperiments);
+            renderMedian('medianEffectIterValue', iterExperiments);
+        }
+
+        // ---- Editable tab parameter panel ----
+        // Renders the active tab's highlighting rule as an inline sentence with
+        // the threshold numbers as small editable inputs. Editing a value mutates
+        // the tab's live param and re-runs highlighting. Tabs without a `template`
+        // (segments, patterns, custom, rerun) show no panel.
+        function formatParamValue(param) {
+            // Trim trailing zeros so 0.05 shows as 0.05 but 2.0 shows as 2.
+            const v = Number(param.value);
+            return (Number.isInteger(v) ? v.toString() : String(v));
+        }
+
+        function renderTabParamsPanel(tabType) {
+            const panel = document.getElementById('tabParamsPanel');
+            const config = TAB_CONFIG[tabType];
+            const tokens = config?.template && config.params
+                ? config.template(config.params)
+                : null;
+
+            if (!tokens) {
+                panel.classList.remove('visible');
+                panel.innerHTML = '';
+                return;
+            }
+
+            const html = tokens.map(token => {
+                if (typeof token === 'string') {
+                    return `<span class="tab-param-text">${token}</span>`;
+                }
+                const param = config.params[token.param];
+                // A param with `options` renders as a dropdown (e.g. Shipped /
+                // Not Shipped) rather than a numeric input.
+                if (param.options) {
+                    const optionsHtml = param.options.map(opt =>
+                        `<option value="${opt}"${opt === param.value ? ' selected' : ''}>${opt}</option>`
+                    ).join('');
+                    return `<span class="tab-param-field"><select class="tab-param-select" data-tab="${tabType}" data-param="${token.param}">${optionsHtml}</select></span>`;
+                }
+                const attrs = [
+                    `type="number"`,
+                    `class="tab-param-input"`,
+                    `data-tab="${tabType}"`,
+                    `data-param="${token.param}"`,
+                    `value="${formatParamValue(param)}"`,
+                    `step="${param.step ?? 1}"`,
+                    param.min != null ? `min="${param.min}"` : '',
+                    param.max != null ? `max="${param.max}"` : '',
+                    `inputmode="decimal"`
+                ].filter(Boolean).join(' ');
+                const suffix = param.suffix ? `<span class="tab-param-suffix">${param.suffix}</span>` : '';
+                return `<span class="tab-param-field"><input ${attrs}>${suffix}</span>`;
+            }).join('');
+
+            panel.innerHTML = html;
+            panel.classList.add('visible');
+
+            panel.querySelectorAll('.tab-param-input').forEach(input => {
+                input.addEventListener('input', function() {
+                    const param = TAB_CONFIG[this.dataset.tab]?.params?.[this.dataset.param];
+                    if (!param) return;
+                    const parsed = parseFloat(this.value);
+                    if (!Number.isNaN(parsed)) {
+                        param.value = parsed;
+                        updateHighlighting(this.dataset.tab);
+                    }
+                });
+                // Prevent the highlight navigator's arrow-key handler from firing
+                // while stepping the number input.
+                input.addEventListener('keydown', e => e.stopPropagation());
+            });
+
+            panel.querySelectorAll('.tab-param-select').forEach(select => {
+                select.addEventListener('change', function() {
+                    const param = TAB_CONFIG[this.dataset.tab]?.params?.[this.dataset.param];
+                    if (!param) return;
+                    param.value = this.value;
+                    updateHighlighting(this.dataset.tab);
+                });
+            });
+        }
+
+        // Tab functionality with icon swapping
+        function updateTabIcons() {
+            document.querySelectorAll('.tab').forEach(tab => {
+                const img = tab.querySelector('.tab-icon');
+                if (tab.classList.contains('active')) {
+                    img.src = img.dataset.selected;
+                } else {
+                    img.src = img.dataset.default;
+                }
+            });
+        }
+
+        document.querySelectorAll('.tab').forEach(tab => {
+            // Click handler
+            tab.addEventListener('click', function() {
+                // An expanded rerun panel (and any open row menu) belongs to the
+                // row it opened on; the row may not survive the tab change, so
+                // close them first.
+                closeRowActionMenu();
+                commitOpenNotesField();
+
+                // Remove active class from all tabs
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+
+                // Add active class to clicked tab
+                this.classList.add('active');
+
+                // Update all tab icons
+                updateTabIcons();
+
+                // Get the tab type
+                const tabType = this.dataset.tab;
+                console.log('Switched to tab:', tabType);
+
+                // Toggle the Custom tab's placeholder panel
+                document.getElementById('customPanel').classList.toggle('visible', tabType === 'custom');
+
+                // Render the editable parameter panel for this tab
+                renderTabParamsPanel(tabType);
+
+                // Update highlighting based on tab (also updates title with counts)
+                updateHighlighting(tabType);
+            });
+
+            // Hover handlers
+            tab.addEventListener('mouseenter', function() {
+                const img = this.querySelector('.tab-icon');
+                img.src = img.dataset.selected;
+            });
+
+            tab.addEventListener('mouseleave', function() {
+                if (!this.classList.contains('active')) {
+                    const img = this.querySelector('.tab-icon');
+                    img.src = img.dataset.default;
+                }
+            });
+        });
+
+        // Initialize icons for default active tab
+        updateTabIcons();
+
+        // Initialize highlighting for default tab (also updates title with counts)
+        renderTabParamsPanel('almost-significant');
+        updateHighlighting('almost-significant');
+        updateSummaryBar();
+
+        // MDE / Base rate inputs: recalculate on change
+        function onStatsInputChange() {
+            refreshUI(experimentsData);
+        }
+
+        const mdeInput = document.getElementById('mdeInput');
+        mdeInput.addEventListener('blur', onStatsInputChange);
+        mdeInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') this.blur();
+        });
+
+        // Search functionality
+        const searchBox = document.querySelector('.search-box');
+        searchBox.value = '';
+        searchBox.addEventListener('focus', function() {
+            this.removeAttribute('readonly');
+        }, { once: true });
+        searchBox.addEventListener('pointerdown', function() {
+            this.removeAttribute('readonly');
+        }, { once: true });
+
+        searchBox.addEventListener('input', function(e) {
+            applyTableVisibility();
+        });
+
+        // Save to cache (used by fetchGrowthBookData)
+        // This caches the raw API payload rather than the mapped rows, so it is
+        // fatter per experiment than a CSV import and would hit the localStorage
+        // quota sooner; IndexedDB removes that ceiling.
+        async function saveToCache(filteredExperiments) {
+            try {
+                await idbSet(IDB_GROWTHBOOK_KEY, filteredExperiments);
+                localStorage.setItem(CACHE_TIMESTAMP_KEY, Date.now().toString());
+                localStorage.removeItem(CACHE_KEY);
+                return true;
+            } catch (error) {
+                console.warn('IndexedDB unavailable for GrowthBook cache:', error.message);
+            }
+
+            const serialized = JSON.stringify(filteredExperiments);
+            try {
+                localStorage.setItem(CACHE_KEY, serialized);
+                localStorage.setItem(CACHE_TIMESTAMP_KEY, Date.now().toString());
+                return true;
+            } catch (error) {
+                // Drop a partial write so the next load re-fetches instead of
+                // restoring a truncated or stale cache.
+                localStorage.removeItem(CACHE_KEY);
+                localStorage.removeItem(CACHE_TIMESTAMP_KEY);
+                if (isQuotaError(error)) {
+                    console.warn('GrowthBook cache exceeded localStorage quota:', error.message);
+                    alert(
+                        `Loaded ${filteredExperiments.length} experiments from GrowthBook, but they are `
+                        + `too large to cache in this browser (about ${approxStoredMB(serialized)} MB, `
+                        + 'over the ~5 MB limit) and IndexedDB is not available.\n\n'
+                        + 'The table below is correct. Reloading the page will re-fetch from the API '
+                        + 'rather than restore this data.'
+                    );
+                } else {
+                    console.error('Error saving to cache:', error);
+                }
+                return false;
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+config.js
+config.local.js
+.env
+.env.*
+!.env.example
+.claude/
+.vscode/settings.json
+_data*/
+_DATA/

@@ -1,0 +1,665 @@
+[
+  {
+    "name": "Product Page CTA Redesign",
+    "id": "exp_product_cta",
+    "date": "2025-06-03",
+    "change": "Replaced text link with a full-width button above the fold",
+    "decision": "Not Shipped",
+    "primaryMetric": 0.3,
+    "primaryMetricLabel": "sales",
+    "primaryMetricType": "binary",
+    "secondaryMetric": 5,
+    "secondaryMetricLabel": "adds to cart",
+    "secondaryMetricType": "binary",
+    "sampleSize": 2400000,
+    "baseRate": 3.2,
+    "triggered": [
+      {
+        "type": "page"
+      },
+      {
+        "type": "device"
+      }
+    ],
+    "traffic": 4,
+    "trafficSubtitle": "on product pages",
+    "owner": "Elena"
+  },
+  {
+    "name": "Checkout Flow Simplification",
+    "id": "exp_checkout_flow",
+    "date": "2025-05-21",
+    "change": "Collapsed 3 checkout steps into a single page",
+    "decision": "Not Shipped",
+    "primaryMetric": 7,
+    "primaryMetricLabel": "sales",
+    "primaryMetricType": "binary",
+    "secondaryMetric": -7,
+    "secondaryMetricLabel": "revenue",
+    "secondaryMetricType": "continuous",
+    "sampleSize": 52000,
+    "baseRate": 4.8,
+    "triggered": [
+      {
+        "type": "page"
+      },
+      {
+        "type": "interaction"
+      }
+    ],
+    "traffic": 4,
+    "trafficSubtitle": null,
+    "owner": "Mary"
+  },
+  {
+    "name": "Homepage Hero Banner Test",
+    "id": "exp_hero_banner",
+    "date": "2025-04-14",
+    "change": "Swapped lifestyle photo for product shot with price",
+    "decision": "Shipped",
+    "primaryMetric": 21,
+    "primaryMetricLabel": "sales",
+    "primaryMetricType": "binary",
+    "secondaryMetric": 34,
+    "secondaryMetricLabel": "checkout visits",
+    "secondaryMetricType": "binary",
+    "sampleSize": 14000,
+    "baseRate": 2.1,
+    "triggered": [
+      {
+        "type": "page"
+      }
+    ],
+    "traffic": 23,
+    "trafficSubtitle": null,
+    "owner": ""
+  },
+  {
+    "name": "Homepage Redesign",
+    "id": "exp_homepage_redesign",
+    "date": "2025-03-30",
+    "change": "Full homepage rebuild: new nav, hero and module order",
+    "decision": "Not Shipped",
+    "primaryMetric": -21,
+    "primaryMetricLabel": "sales",
+    "primaryMetricType": "binary",
+    "secondaryMetric": 12,
+    "secondaryMetricLabel": "checkout visits",
+    "secondaryMetricType": "binary",
+    "sampleSize": 22000,
+    "baseRate": 2.1,
+    "triggered": [
+      {
+        "type": "page"
+      },
+      {
+        "type": "segment"
+      }
+    ],
+    "traffic": 23,
+    "trafficSubtitle": null,
+    "owner": ""
+  },
+  {
+    "name": "Mobile Navigation Update",
+    "id": "exp_mobile_nav",
+    "date": "2025-03-12",
+    "change": "Moved nav to a bottom bar with 5 fixed items",
+    "decision": "Shipped",
+    "primaryMetric": 10,
+    "primaryMetricLabel": "sales",
+    "primaryMetricType": "binary",
+    "secondaryMetric": -4,
+    "secondaryMetricLabel": "adds to cart",
+    "secondaryMetricType": "binary",
+    "sampleSize": 310000,
+    "baseRate": 5.5,
+    "triggered": [
+      {
+        "type": "page"
+      },
+      {
+        "type": "interaction"
+      }
+    ],
+    "traffic": 23,
+    "trafficSubtitle": null,
+    "owner": ""
+  },
+  {
+    "name": "Mobile Icons With Labels",
+    "id": "exp_mobile_icons",
+    "date": "2025-02-25",
+    "change": "Added text labels under each nav icon",
+    "decision": "Not Shipped",
+    "primaryMetric": -0.4,
+    "primaryMetricLabel": "sales",
+    "primaryMetricType": "binary",
+    "secondaryMetric": 4,
+    "secondaryMetricLabel": "adds to cart",
+    "secondaryMetricType": "binary",
+    "sampleSize": 3100000,
+    "baseRate": 4.2,
+    "triggered": [
+      {
+        "type": "page"
+      },
+      {
+        "type": "interaction"
+      },
+      {
+        "type": "device"
+      }
+    ],
+    "traffic": 23,
+    "trafficSubtitle": null,
+    "owner": ""
+  },
+  {
+    "name": "Carousel Images",
+    "id": "exp_carousel_images",
+    "date": "2025-02-08",
+    "change": "Auto-rotating carousel replaced with a static hero",
+    "decision": "Not Shipped",
+    "primaryMetric": -17,
+    "primaryMetricLabel": "sales",
+    "primaryMetricType": "binary",
+    "secondaryMetric": -34,
+    "secondaryMetricLabel": "clicks on listings",
+    "secondaryMetricType": "binary",
+    "sampleSize": 45000,
+    "baseRate": 6.3,
+    "triggered": [
+      {
+        "type": "page"
+      }
+    ],
+    "traffic": 23,
+    "trafficSubtitle": null,
+    "owner": ""
+  },
+  {
+    "name": "Email Subject Line Test",
+    "id": "exp_email_subject",
+    "date": "2025-01-19",
+    "change": "Added recipient first name and urgency to the subject",
+    "decision": "Not Shipped",
+    "primaryMetric": 5,
+    "primaryMetricLabel": "sales",
+    "primaryMetricType": "binary",
+    "secondaryMetric": 10,
+    "secondaryMetricLabel": "revenue",
+    "secondaryMetricType": "continuous",
+    "sampleSize": 280000,
+    "baseRate": 1.8,
+    "iterations": 2,
+    "triggered": [
+      {
+        "type": "page"
+      },
+      {
+        "type": "segment"
+      }
+    ],
+    "traffic": 15,
+    "trafficSubtitle": "on campaign pages",
+    "owner": "Sarah"
+  },
+  {
+    "name": "Search Bar Placement",
+    "id": "exp_search_bar",
+    "date": "2024-12-15",
+    "change": "Moved search from the menu into the header bar",
+    "decision": "Not Shipped",
+    "primaryMetric": 3,
+    "primaryMetricLabel": "sales",
+    "primaryMetricType": "binary",
+    "secondaryMetric": -12,
+    "secondaryMetricLabel": "checkouts",
+    "secondaryMetricType": "binary",
+    "sampleSize": 55000,
+    "baseRate": 7.1,
+    "triggered": [
+      {
+        "type": "page"
+      },
+      {
+        "type": "interaction"
+      }
+    ],
+    "traffic": 8,
+    "trafficSubtitle": null,
+    "owner": "Mike"
+  },
+  {
+    "name": "Footer Link Redesign",
+    "id": "exp_footer_links",
+    "date": "2024-11-28",
+    "change": "Regrouped footer links into 4 labelled columns",
+    "decision": "Not Shipped",
+    "primaryMetric": 2,
+    "primaryMetricLabel": "sales",
+    "primaryMetricType": "binary",
+    "secondaryMetric": -2,
+    "secondaryMetricLabel": "adds to cart",
+    "secondaryMetricType": "binary",
+    "sampleSize": 2700000,
+    "baseRate": 3.5,
+    "triggered": [
+      {
+        "type": "page"
+      }
+    ],
+    "traffic": 5,
+    "trafficSubtitle": null,
+    "owner": ""
+  },
+  {
+    "name": "Pricing Page Layout Test",
+    "id": "exp_pricing_layout",
+    "date": "2024-11-05",
+    "change": "Three pricing tiers side by side instead of stacked",
+    "decision": "Not Shipped",
+    "primaryMetric": 4.2,
+    "primaryMetricLabel": "conversions",
+    "primaryMetricType": "binary",
+    "secondaryMetric": 6.1,
+    "secondaryMetricLabel": "revenue",
+    "secondaryMetricType": "continuous",
+    "sampleSize": 98000,
+    "baseRate": 5.4,
+    "iterations": 2,
+    "triggered": [
+      {
+        "type": "page"
+      }
+    ],
+    "traffic": 12,
+    "trafficSubtitle": "on pricing page",
+    "owner": "Elena",
+    "additionalComparisons": [
+      {
+        "variationName": "Compact Cards",
+        "change": "Same three tiers in condensed cards",
+        "primaryMetric": -1.3,
+        "primaryMetricLabel": "conversions",
+        "primaryMetricType": "binary",
+        "secondaryMetric": 2.8,
+        "secondaryMetricLabel": "revenue",
+        "secondaryMetricType": "continuous",
+        "sampleSize": 97500
+      }
+    ]
+  },
+  {
+    "name": "Add To Cart Button Styles",
+    "id": "exp_atc_buttons",
+    "date": "2024-10-17",
+    "change": "Solid high-contrast button replacing the outlined one",
+    "decision": "Shipped",
+    "primaryMetric": 8.7,
+    "primaryMetricLabel": "adds to cart",
+    "primaryMetricType": "binary",
+    "secondaryMetric": 3.2,
+    "secondaryMetricLabel": "revenue",
+    "secondaryMetricType": "continuous",
+    "sampleSize": 320000,
+    "baseRate": 12.5,
+    "iterations": 2,
+    "triggered": [
+      {
+        "type": "page"
+      },
+      {
+        "type": "interaction"
+      },
+      {
+        "type": "segment"
+      }
+    ],
+    "traffic": 18,
+    "trafficSubtitle": null,
+    "owner": "Mary",
+    "additionalComparisons": [
+      {
+        "variationName": "Animated Pulse",
+        "change": "Solid button with a slow pulse animation",
+        "primaryMetric": 2.1,
+        "primaryMetricLabel": "adds to cart",
+        "primaryMetricType": "binary",
+        "secondaryMetric": -0.5,
+        "secondaryMetricLabel": "revenue",
+        "secondaryMetricType": "continuous",
+        "sampleSize": 315000
+      }
+    ]
+  },
+  {
+    "name": "Landing Page Headline Test",
+    "id": "exp_lp_headline",
+    "date": "2024-09-24",
+    "change": "Benefit-led headline replacing the feature-led one",
+    "decision": "Not Shipped",
+    "primaryMetric": 3.5,
+    "primaryMetricLabel": "signups",
+    "primaryMetricType": "binary",
+    "secondaryMetric": 1.8,
+    "secondaryMetricLabel": "revenue",
+    "secondaryMetricType": "continuous",
+    "sampleSize": 19000,
+    "baseRate": 9.2,
+    "iterations": 3,
+    "triggered": [
+      {
+        "type": "page"
+      }
+    ],
+    "traffic": 25,
+    "trafficSubtitle": "on landing pages",
+    "owner": "Sarah",
+    "additionalComparisons": [
+      {
+        "variationName": "Question Format",
+        "change": "Headline rewritten as a question",
+        "primaryMetric": -2.1,
+        "primaryMetricLabel": "signups",
+        "primaryMetricType": "binary",
+        "secondaryMetric": 0.4,
+        "secondaryMetricLabel": "revenue",
+        "secondaryMetricType": "continuous",
+        "sampleSize": 18500
+      },
+      {
+        "variationName": "Social Proof",
+        "change": "Headline replaced with a customer-count claim",
+        "primaryMetric": 5.9,
+        "primaryMetricLabel": "signups",
+        "primaryMetricType": "binary",
+        "secondaryMetric": 4.3,
+        "secondaryMetricLabel": "revenue",
+        "secondaryMetricType": "continuous",
+        "sampleSize": 19200
+      }
+    ]
+  },
+  {
+    "name": "Guest Checkout Option",
+    "id": "exp_guest_checkout",
+    "date": "2025-08-19",
+    "change": "Added a guest option ahead of account creation",
+    "decision": "Not Shipped",
+    "primaryMetric": 6.4,
+    "primaryMetricLabel": "conversions",
+    "primaryMetricType": "binary",
+    "secondaryMetric": 3.1,
+    "secondaryMetricLabel": "revenue",
+    "secondaryMetricType": "continuous",
+    "sampleSize": 14000,
+    "baseRate": 4.6,
+    "triggered": [
+      {
+        "type": "page"
+      },
+      {
+        "type": "device"
+      }
+    ],
+    "traffic": 9,
+    "trafficSubtitle": "on checkout entry",
+    "owner": "Elena"
+  },
+  {
+    "name": "Sticky Add To Cart Bar",
+    "id": "exp_sticky_atc",
+    "date": "2025-04-22",
+    "change": "Add-to-cart bar pinned to the viewport on scroll",
+    "decision": "Shipped",
+    "primaryMetric": 9.1,
+    "primaryMetricLabel": "sales",
+    "primaryMetricType": "binary",
+    "secondaryMetric": 7.4,
+    "secondaryMetricLabel": "revenue",
+    "secondaryMetricType": "continuous",
+    "sampleSize": 480000,
+    "baseRate": 8.3,
+    "iterations": 2,
+    "triggered": [
+      {
+        "type": "page"
+      }
+    ],
+    "traffic": 22,
+    "trafficSubtitle": "on product pages",
+    "owner": "Marcus"
+  },
+  {
+    "name": "Newsletter Signup Copy",
+    "id": "exp_newsletter_copy",
+    "date": "2025-02-11",
+    "change": "Rewrote the signup prompt around a content benefit",
+    "decision": "Not Shipped",
+    "primaryMetric": 0.6,
+    "primaryMetricLabel": "signups",
+    "primaryMetricType": "binary",
+    "secondaryMetric": 0.2,
+    "secondaryMetricLabel": "opens",
+    "secondaryMetricType": "binary",
+    "sampleSize": 1850000,
+    "baseRate": 2.4,
+    "triggered": [
+      {
+        "type": "page"
+      }
+    ],
+    "traffic": 35,
+    "trafficSubtitle": "sitewide footer",
+    "owner": "Priya"
+  },
+  {
+    "name": "Autoplay Product Video",
+    "id": "exp_autoplay_video",
+    "date": "2025-05-30",
+    "change": "Product video autoplays muted on page load",
+    "decision": "Not Shipped",
+    "primaryMetric": -12.5,
+    "primaryMetricLabel": "conversions",
+    "primaryMetricType": "binary",
+    "secondaryMetric": -8.2,
+    "secondaryMetricLabel": "time on page",
+    "secondaryMetricType": "continuous",
+    "sampleSize": 260000,
+    "baseRate": 5.9,
+    "triggered": [
+      {
+        "type": "page"
+      },
+      {
+        "type": "device"
+      }
+    ],
+    "traffic": 18,
+    "trafficSubtitle": "on product pages",
+    "owner": "Marcus"
+  },
+  {
+    "name": "Shipping Threshold Messaging",
+    "id": "exp_shipping_threshold",
+    "date": "2025-07-08",
+    "change": "Banner showing spend remaining for free shipping",
+    "decision": "Not Shipped",
+    "primaryMetric": 5.8,
+    "primaryMetricLabel": "conversions",
+    "primaryMetricType": "binary",
+    "secondaryMetric": 4.9,
+    "secondaryMetricLabel": "average order value",
+    "secondaryMetricType": "continuous",
+    "sampleSize": 76000,
+    "baseRate": 6.7,
+    "iterations": 2,
+    "triggered": [
+      {
+        "type": "page"
+      }
+    ],
+    "traffic": 15,
+    "trafficSubtitle": "on cart page",
+    "owner": "Elena",
+    "additionalComparisons": [
+      {
+        "variationName": "Free Over $50",
+        "change": "Threshold banner set at $50",
+        "primaryMetric": 2.1,
+        "primaryMetricLabel": "conversions",
+        "primaryMetricType": "binary",
+        "secondaryMetric": 6.3,
+        "secondaryMetricLabel": "average order value",
+        "secondaryMetricType": "continuous",
+        "sampleSize": 75200
+      },
+      {
+        "variationName": "Free Over $75",
+        "change": "Threshold banner set at $75",
+        "primaryMetric": -3.4,
+        "primaryMetricLabel": "conversions",
+        "primaryMetricType": "binary",
+        "secondaryMetric": 1.2,
+        "secondaryMetricLabel": "average order value",
+        "secondaryMetricType": "continuous",
+        "sampleSize": 74800
+      }
+    ]
+  },
+  {
+    "name": "Testimonial Placement",
+    "id": "exp_testimonial_place",
+    "date": "2025-09-02",
+    "change": "Moved testimonials above the fold",
+    "decision": "Not Shipped",
+    "primaryMetric": -4.7,
+    "primaryMetricLabel": "conversions",
+    "primaryMetricType": "binary",
+    "secondaryMetric": 1.4,
+    "secondaryMetricLabel": "scroll depth",
+    "secondaryMetricType": "continuous",
+    "sampleSize": 11500,
+    "baseRate": 3.8,
+    "triggered": [
+      {
+        "type": "page"
+      }
+    ],
+    "traffic": 7,
+    "trafficSubtitle": "on landing pages",
+    "owner": "Priya"
+  },
+  {
+    "name": "One Tap Apple Pay",
+    "id": "exp_one_tap_pay",
+    "date": "2025-03-17",
+    "change": "Apple Pay offered as the first checkout option",
+    "decision": "Shipped",
+    "primaryMetric": 7.9,
+    "primaryMetricLabel": "checkouts",
+    "primaryMetricType": "binary",
+    "secondaryMetric": 5.5,
+    "secondaryMetricLabel": "revenue",
+    "secondaryMetricType": "continuous",
+    "sampleSize": 135000,
+    "baseRate": 9.4,
+    "triggered": [
+      {
+        "type": "device"
+      }
+    ],
+    "traffic": 26,
+    "trafficSubtitle": "on mobile checkout",
+    "owner": "Marcus"
+  },
+  {
+    "name": "Bundle Recommendations",
+    "id": "exp_bundle_recs",
+    "date": "2025-06-25",
+    "change": "Added a \"frequently bought together\" bundle to the cart",
+    "decision": "Not Shipped",
+    "primaryMetric": 3.2,
+    "primaryMetricLabel": "revenue per visitor",
+    "primaryMetricType": "continuous",
+    "secondaryMetric": 2.6,
+    "secondaryMetricLabel": "items per order",
+    "secondaryMetricType": "continuous",
+    "sampleSize": 210000,
+    "baseRate": 7.2,
+    "iterations": 3,
+    "triggered": [
+      {
+        "type": "page"
+      }
+    ],
+    "traffic": 20,
+    "trafficSubtitle": "on cart page",
+    "owner": "Elena"
+  },
+  {
+    "name": "Search Autocomplete V3",
+    "id": "exp_search_autocomplete",
+    "date": "2025-10-14",
+    "change": "Autocomplete now suggests products, not just terms",
+    "decision": "Not Shipped",
+    "primaryMetric": 1.8,
+    "primaryMetricLabel": "searches converted",
+    "primaryMetricType": "binary",
+    "secondaryMetric": 0.9,
+    "secondaryMetricLabel": "search exits",
+    "secondaryMetricType": "binary",
+    "sampleSize": 420000,
+    "baseRate": 11.3,
+    "iterations": 3,
+    "triggered": [
+      {
+        "type": "page"
+      },
+      {
+        "type": "device"
+      }
+    ],
+    "traffic": 31,
+    "trafficSubtitle": "on search bar",
+    "owner": "Priya"
+  },
+  {
+    "name": "Interstitial Promo Modal",
+    "id": "exp_promo_modal",
+    "date": "2025-01-28",
+    "change": "Promo modal on entry instead of an inline banner",
+    "decision": "Not Shipped",
+    "primaryMetric": -9.3,
+    "primaryMetricLabel": "conversions",
+    "primaryMetricType": "binary",
+    "secondaryMetric": -14.1,
+    "secondaryMetricLabel": "bounce rate",
+    "secondaryMetricType": "binary",
+    "sampleSize": 890000,
+    "baseRate": 4.1,
+    "triggered": [
+      {
+        "type": "page"
+      }
+    ],
+    "traffic": 40,
+    "trafficSubtitle": "sitewide on entry",
+    "owner": "Marcus",
+    "additionalComparisons": [
+      {
+        "variationName": "Delayed 10s",
+        "change": "Same modal, held back 10 seconds",
+        "primaryMetric": -2.2,
+        "primaryMetricLabel": "conversions",
+        "primaryMetricType": "binary",
+        "secondaryMetric": -5.6,
+        "secondaryMetricLabel": "bounce rate",
+        "secondaryMetricType": "binary",
+        "sampleSize": 885000
+      }
+    ]
+  }
+]

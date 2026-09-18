@@ -1,0 +1,965 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Convert.com Data Export</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: #7f8c8d;
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 8px;
+            padding: 24px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .card h2 {
+            margin-top: 0;
+            color: #34495e;
+            font-size: 18px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 500;
+            color: #555;
+        }
+
+        input[type="text"],
+        input[type="password"] {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            transition: border-color 0.2s;
+        }
+
+        input[type="text"]:focus,
+        input[type="password"]:focus {
+            outline: none;
+            border-color: #3498db;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .btn-primary {
+            background-color: #3498db;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background-color: #2980b9;
+        }
+
+        .btn-primary:disabled {
+            background-color: #bdc3c7;
+            cursor: not-allowed;
+        }
+
+        .btn-secondary {
+            background-color: #95a5a6;
+            color: white;
+            margin-left: 10px;
+        }
+
+        .btn-secondary:hover {
+            background-color: #7f8c8d;
+        }
+
+        .status {
+            margin-top: 20px;
+            padding: 12px;
+            border-radius: 4px;
+            display: none;
+        }
+
+        .status.info {
+            background-color: #e8f4fc;
+            border: 1px solid #3498db;
+            color: #2980b9;
+            display: block;
+        }
+
+        .status.success {
+            background-color: #e8f8f0;
+            border: 1px solid #27ae60;
+            color: #1e8449;
+            display: block;
+        }
+
+        .status.error {
+            background-color: #fdeaea;
+            border: 1px solid #e74c3c;
+            color: #c0392b;
+            display: block;
+        }
+
+        .log-container {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            border-radius: 4px;
+            padding: 16px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        .log-container .log-info { color: #569cd6; }
+        .log-container .log-success { color: #4ec9b0; }
+        .log-container .log-error { color: #f14c4c; }
+        .log-container .log-warn { color: #dcdcaa; }
+
+        .help-text {
+            font-size: 12px;
+            color: #7f8c8d;
+            margin-top: 4px;
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .checkbox-group input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+    </style>
+</head>
+<body>
+    <h1>Convert.com Data Export</h1>
+    <p class="subtitle">Export your Convert.com experiments and results to CSV</p>
+
+    <div class="card">
+        <h2>API Credentials</h2>
+        <div class="form-group">
+            <label for="appId">Application ID</label>
+            <input type="text" id="appId" placeholder="Enter your Convert Application ID">
+            <p class="help-text">Found in your Convert account under Developer > API Keys</p>
+        </div>
+        <div class="form-group">
+            <label for="secretKey">Secret Key</label>
+            <input type="password" id="secretKey" placeholder="Enter your Convert Secret Key">
+            <div class="checkbox-group" style="margin-top: 6px;">
+                <input type="checkbox" id="rememberSecret">
+                <label for="rememberSecret" style="margin-bottom: 0; font-weight: normal; font-size: 12px;">Remember secret key (stored locally)</label>
+            </div>
+        </div>
+        <div class="form-group">
+            <label for="accountId">Account ID</label>
+            <input type="text" id="accountId" placeholder="Enter your Convert Account ID">
+            <p class="help-text">Your Convert account identifier</p>
+        </div>
+        <div class="form-group">
+            <label for="projectId">Project ID (optional)</label>
+            <input type="text" id="projectId" placeholder="Leave empty to fetch all projects">
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Export Options</h2>
+        <p class="help-text" style="margin-bottom: 16px;">Select which data types to export as separate CSV files</p>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px 24px;">
+            <div class="checkbox-group">
+                <input type="checkbox" id="includeExperiences" checked>
+                <label for="includeExperiences" style="margin-bottom: 0;">Experiences</label>
+            </div>
+            <div class="checkbox-group">
+                <input type="checkbox" id="includeSections" checked>
+                <label for="includeSections" style="margin-bottom: 0;">Experience Sections</label>
+            </div>
+            <div class="checkbox-group">
+                <input type="checkbox" id="includeSectionVersions" checked>
+                <label for="includeSectionVersions" style="margin-bottom: 0;">Section Versions</label>
+            </div>
+            <div class="checkbox-group">
+                <input type="checkbox" id="includeVariations" checked>
+                <label for="includeVariations" style="margin-bottom: 0;">Variations</label>
+            </div>
+            <div class="checkbox-group">
+                <input type="checkbox" id="includeChanges" checked>
+                <label for="includeChanges" style="margin-bottom: 0;">Experience Changes</label>
+            </div>
+            <div class="checkbox-group">
+                <input type="checkbox" id="includeGoals" checked>
+                <label for="includeGoals" style="margin-bottom: 0;">Goals</label>
+            </div>
+            <div class="checkbox-group">
+                <input type="checkbox" id="includeLocations" checked>
+                <label for="includeLocations" style="margin-bottom: 0;">Locations</label>
+            </div>
+            <div class="checkbox-group">
+                <input type="checkbox" id="includeAudiences" checked>
+                <label for="includeAudiences" style="margin-bottom: 0;">Audiences</label>
+            </div>
+            <div class="checkbox-group">
+                <input type="checkbox" id="includeHypotheses" checked>
+                <label for="includeHypotheses" style="margin-bottom: 0;">Hypotheses</label>
+            </div>
+            <div class="checkbox-group">
+                <input type="checkbox" id="includeObservations" checked>
+                <label for="includeObservations" style="margin-bottom: 0;">Observations</label>
+            </div>
+            <div class="checkbox-group">
+                <input type="checkbox" id="includeTags" checked>
+                <label for="includeTags" style="margin-bottom: 0;">Tags</label>
+            </div>
+            <div class="checkbox-group">
+                <input type="checkbox" id="includeCdnImages" checked>
+                <label for="includeCdnImages" style="margin-bottom: 0;">CDN Images</label>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Actions</h2>
+        <div class="button-group">
+            <button class="btn btn-primary" id="fetchBtn" onclick="startExport()">
+                Fetch & Download CSV
+            </button>
+            <button class="btn btn-secondary" id="testBtn" onclick="testConnection()">
+                Test Connection
+            </button>
+        </div>
+        <div id="status" class="status"></div>
+    </div>
+
+    <div class="card">
+        <h2>Log Output</h2>
+        <div id="logOutput" class="log-container">Waiting for action...</div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    <script>
+        const API_BASE = 'https://api.convert.com/api/v2';
+
+        // Log helper
+        function log(message, type = 'info') {
+            const logOutput = document.getElementById('logOutput');
+            const timestamp = new Date().toLocaleTimeString();
+            const className = `log-${type}`;
+            logOutput.innerHTML += `<span class="${className}">[${timestamp}] ${message}</span>\n`;
+            logOutput.scrollTop = logOutput.scrollHeight;
+        }
+
+        function clearLog() {
+            document.getElementById('logOutput').innerHTML = '';
+        }
+
+        function setStatus(message, type) {
+            const status = document.getElementById('status');
+            status.className = `status ${type}`;
+            status.textContent = message;
+        }
+
+        // Generate HMAC signature for Convert API
+        function generateSignature(secretKey, method, url, body = '') {
+            const timestamp = Math.floor(Date.now() / 1000);
+            const expireTime = timestamp + 300; // 5 minutes from now
+
+            // Create the string to sign
+            const bodyHash = body ? CryptoJS.SHA256(body).toString() : '';
+            const stringToSign = [method.toUpperCase(), url, bodyHash, expireTime].join('\n');
+
+            // Generate HMAC-SHA256 signature
+            const signature = CryptoJS.HmacSHA256(stringToSign, secretKey).toString();
+
+            return {
+                signature,
+                expireTime
+            };
+        }
+
+        // Make authenticated API request
+        async function apiRequest(endpoint, method = 'GET', body = null) {
+            const appId = document.getElementById('appId').value.trim();
+            const secretKey = document.getElementById('secretKey').value.trim();
+
+            if (!appId || !secretKey) {
+                throw new Error('Application ID and Secret Key are required');
+            }
+
+            const url = `${API_BASE}${endpoint}`;
+            const bodyStr = body ? JSON.stringify(body) : '';
+            const { signature, expireTime } = generateSignature(secretKey, method, url, bodyStr);
+
+            const headers = {
+                'Content-Type': 'application/json',
+                'Authorization': `Convert ${appId}:${signature}`,
+                'X-Convert-Expire': expireTime.toString()
+            };
+
+            log(`${method} ${endpoint}`, 'info');
+
+            const response = await fetch(url, {
+                method,
+                headers,
+                body: bodyStr || undefined
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`API Error ${response.status}: ${errorText}`);
+            }
+
+            return response.json();
+        }
+
+        // Test API connection
+        async function testConnection() {
+            clearLog();
+            log('Testing connection to Convert API...', 'info');
+
+            try {
+                const accountId = document.getElementById('accountId').value.trim();
+                if (!accountId) {
+                    throw new Error('Account ID is required');
+                }
+
+                // Try to fetch projects list
+                const result = await apiRequest(`/accounts/${accountId}/projects`);
+                log(`Connection successful! Found ${result.data?.length || 0} projects.`, 'success');
+                setStatus('Connection successful!', 'success');
+
+                if (result.data && result.data.length > 0) {
+                    log('Projects:', 'info');
+                    result.data.forEach(p => {
+                        log(`  - ${p.name} (ID: ${p.id})`, 'info');
+                    });
+                }
+            } catch (error) {
+                log(`Connection failed: ${error.message}`, 'error');
+                setStatus(`Connection failed: ${error.message}`, 'error');
+            }
+        }
+
+        // Get all projects (used by multiple fetch functions)
+        async function fetchProjects(accountId) {
+            const result = await apiRequest(`/accounts/${accountId}/projects`);
+            return result.data || [];
+        }
+
+        // Generic fetch function for project-level resources
+        async function fetchProjectResource(accountId, projectId, resourceName, endpoint) {
+            try {
+                const result = await apiRequest(`/accounts/${accountId}/projects/${projectId}/${endpoint}`);
+                return (result.data || []).map(item => ({
+                    ...item,
+                    projectId: projectId
+                }));
+            } catch (error) {
+                log(`  Could not fetch ${resourceName}: ${error.message}`, 'warn');
+                return [];
+            }
+        }
+
+        // Generic fetch function for experience-level resources
+        async function fetchExperienceResource(accountId, projectId, experienceId, resourceName, endpoint) {
+            try {
+                const result = await apiRequest(`/accounts/${accountId}/projects/${projectId}/experiences/${experienceId}/${endpoint}`);
+                return (result.data || []).map(item => ({
+                    ...item,
+                    projectId: projectId,
+                    experienceId: experienceId
+                }));
+            } catch (error) {
+                log(`  Could not fetch ${resourceName} for experience ${experienceId}: ${error.message}`, 'warn');
+                return [];
+            }
+        }
+
+        // Fetch all experiences
+        async function fetchExperiences(accountId, projects) {
+            const experiences = [];
+            for (const project of projects) {
+                log(`Fetching experiences from project: ${project.name}...`, 'info');
+                const items = await fetchProjectResource(accountId, project.id, 'experiences', 'experiences');
+                items.forEach(item => item.projectName = project.name);
+                experiences.push(...items);
+                log(`  Found ${items.length} experiences`, 'success');
+            }
+            return experiences;
+        }
+
+        // Fetch goals
+        async function fetchGoals(accountId, projects) {
+            const goals = [];
+            for (const project of projects) {
+                log(`Fetching goals from project: ${project.name}...`, 'info');
+                const items = await fetchProjectResource(accountId, project.id, 'goals', 'goals');
+                items.forEach(item => item.projectName = project.name);
+                goals.push(...items);
+                log(`  Found ${items.length} goals`, 'success');
+            }
+            return goals;
+        }
+
+        // Fetch locations
+        async function fetchLocations(accountId, projects) {
+            const locations = [];
+            for (const project of projects) {
+                log(`Fetching locations from project: ${project.name}...`, 'info');
+                const items = await fetchProjectResource(accountId, project.id, 'locations', 'locations');
+                items.forEach(item => item.projectName = project.name);
+                locations.push(...items);
+                log(`  Found ${items.length} locations`, 'success');
+            }
+            return locations;
+        }
+
+        // Fetch audiences
+        async function fetchAudiences(accountId, projects) {
+            const audiences = [];
+            for (const project of projects) {
+                log(`Fetching audiences from project: ${project.name}...`, 'info');
+                const items = await fetchProjectResource(accountId, project.id, 'audiences', 'audiences');
+                items.forEach(item => item.projectName = project.name);
+                audiences.push(...items);
+                log(`  Found ${items.length} audiences`, 'success');
+            }
+            return audiences;
+        }
+
+        // Fetch tags
+        async function fetchTags(accountId, projects) {
+            const tags = [];
+            for (const project of projects) {
+                log(`Fetching tags from project: ${project.name}...`, 'info');
+                const items = await fetchProjectResource(accountId, project.id, 'tags', 'tags');
+                items.forEach(item => item.projectName = project.name);
+                tags.push(...items);
+                log(`  Found ${items.length} tags`, 'success');
+            }
+            return tags;
+        }
+
+        // Fetch CDN images
+        async function fetchCdnImages(accountId, projects) {
+            const images = [];
+            for (const project of projects) {
+                log(`Fetching CDN images from project: ${project.name}...`, 'info');
+                const items = await fetchProjectResource(accountId, project.id, 'cdn_images', 'cdn_images');
+                items.forEach(item => item.projectName = project.name);
+                images.push(...items);
+                log(`  Found ${items.length} CDN images`, 'success');
+            }
+            return images;
+        }
+
+        // Fetch variations for experiences
+        async function fetchVariations(accountId, experiences) {
+            const variations = [];
+            log(`Fetching variations for ${experiences.length} experiences...`, 'info');
+            for (let i = 0; i < experiences.length; i++) {
+                const exp = experiences[i];
+                const items = await fetchExperienceResource(accountId, exp.projectId, exp.id, 'variations', 'variations');
+                items.forEach(item => item.experienceName = exp.name);
+                variations.push(...items);
+                if ((i + 1) % 10 === 0 || i === experiences.length - 1) {
+                    log(`  Processed ${i + 1}/${experiences.length} experiences`, 'info');
+                }
+            }
+            log(`  Total variations found: ${variations.length}`, 'success');
+            return variations;
+        }
+
+        // Fetch sections for experiences
+        async function fetchSections(accountId, experiences) {
+            const sections = [];
+            log(`Fetching sections for ${experiences.length} experiences...`, 'info');
+            for (let i = 0; i < experiences.length; i++) {
+                const exp = experiences[i];
+                const items = await fetchExperienceResource(accountId, exp.projectId, exp.id, 'sections', 'sections');
+                items.forEach(item => item.experienceName = exp.name);
+                sections.push(...items);
+                if ((i + 1) % 10 === 0 || i === experiences.length - 1) {
+                    log(`  Processed ${i + 1}/${experiences.length} experiences`, 'info');
+                }
+            }
+            log(`  Total sections found: ${sections.length}`, 'success');
+            return sections;
+        }
+
+        // Fetch section versions
+        async function fetchSectionVersions(accountId, sections) {
+            const versions = [];
+            log(`Fetching section versions for ${sections.length} sections...`, 'info');
+            for (let i = 0; i < sections.length; i++) {
+                const section = sections[i];
+                try {
+                    const result = await apiRequest(
+                        `/accounts/${accountId}/projects/${section.projectId}/experiences/${section.experienceId}/sections/${section.id}/versions`
+                    );
+                    const items = (result.data || []).map(item => ({
+                        ...item,
+                        projectId: section.projectId,
+                        experienceId: section.experienceId,
+                        sectionId: section.id
+                    }));
+                    versions.push(...items);
+                } catch (error) {
+                    // Silent fail for individual sections
+                }
+                if ((i + 1) % 10 === 0 || i === sections.length - 1) {
+                    log(`  Processed ${i + 1}/${sections.length} sections`, 'info');
+                }
+            }
+            log(`  Total section versions found: ${versions.length}`, 'success');
+            return versions;
+        }
+
+        // Fetch experience changes
+        async function fetchChanges(accountId, experiences) {
+            const changes = [];
+            log(`Fetching changes for ${experiences.length} experiences...`, 'info');
+            for (let i = 0; i < experiences.length; i++) {
+                const exp = experiences[i];
+                const items = await fetchExperienceResource(accountId, exp.projectId, exp.id, 'changes', 'changes');
+                items.forEach(item => item.experienceName = exp.name);
+                changes.push(...items);
+                if ((i + 1) % 10 === 0 || i === experiences.length - 1) {
+                    log(`  Processed ${i + 1}/${experiences.length} experiences`, 'info');
+                }
+            }
+            log(`  Total changes found: ${changes.length}`, 'success');
+            return changes;
+        }
+
+        // Fetch hypotheses for experiences
+        async function fetchHypotheses(accountId, experiences) {
+            const hypotheses = [];
+            log(`Fetching hypotheses for ${experiences.length} experiences...`, 'info');
+            for (let i = 0; i < experiences.length; i++) {
+                const exp = experiences[i];
+                const items = await fetchExperienceResource(accountId, exp.projectId, exp.id, 'hypotheses', 'hypotheses');
+                items.forEach(item => item.experienceName = exp.name);
+                hypotheses.push(...items);
+                if ((i + 1) % 10 === 0 || i === experiences.length - 1) {
+                    log(`  Processed ${i + 1}/${experiences.length} experiences`, 'info');
+                }
+            }
+            log(`  Total hypotheses found: ${hypotheses.length}`, 'success');
+            return hypotheses;
+        }
+
+        // Fetch observations for experiences
+        async function fetchObservations(accountId, experiences) {
+            const observations = [];
+            log(`Fetching observations for ${experiences.length} experiences...`, 'info');
+            for (let i = 0; i < experiences.length; i++) {
+                const exp = experiences[i];
+                const items = await fetchExperienceResource(accountId, exp.projectId, exp.id, 'observations', 'observations');
+                items.forEach(item => item.experienceName = exp.name);
+                observations.push(...items);
+                if ((i + 1) % 10 === 0 || i === experiences.length - 1) {
+                    log(`  Processed ${i + 1}/${experiences.length} experiences`, 'info');
+                }
+            }
+            log(`  Total observations found: ${observations.length}`, 'success');
+            return observations;
+        }
+
+        // Convert data to CSV format
+        function convertToCSV(data, headers) {
+            const csvRows = [];
+
+            // Add headers
+            csvRows.push(headers.join(','));
+
+            // Add data rows
+            for (const row of data) {
+                const values = headers.map(header => {
+                    const val = row[header];
+                    if (val === null || val === undefined) return '';
+                    // Escape quotes and wrap in quotes if contains comma or quotes
+                    const stringVal = String(val);
+                    if (stringVal.includes(',') || stringVal.includes('"') || stringVal.includes('\n')) {
+                        return `"${stringVal.replace(/"/g, '""')}"`;
+                    }
+                    return stringVal;
+                });
+                csvRows.push(values.join(','));
+            }
+
+            return csvRows.join('\n');
+        }
+
+        // Download CSV file
+        function downloadCSV(content, filename) {
+            const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+
+            link.setAttribute('href', url);
+            link.setAttribute('download', filename);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }
+
+        // Helper to export data as CSV
+        function exportAsCSV(data, filename, customHeaders = null) {
+            if (!data || data.length === 0) {
+                log(`  No data to export for ${filename}`, 'warn');
+                return;
+            }
+
+            // Auto-detect headers from first object if not provided
+            const headers = customHeaders || Object.keys(data[0]);
+            const csv = convertToCSV(data, headers);
+            downloadCSV(csv, filename);
+            log(`  Exported ${data.length} records to ${filename}`, 'success');
+        }
+
+        // Main export function
+        async function startExport() {
+            clearLog();
+            log('Starting comprehensive export...', 'info');
+
+            const fetchBtn = document.getElementById('fetchBtn');
+            fetchBtn.disabled = true;
+
+            try {
+                const accountId = document.getElementById('accountId').value.trim();
+                const projectIdFilter = document.getElementById('projectId').value.trim() || null;
+
+                // Get export options
+                const options = {
+                    experiences: document.getElementById('includeExperiences').checked,
+                    sections: document.getElementById('includeSections').checked,
+                    sectionVersions: document.getElementById('includeSectionVersions').checked,
+                    variations: document.getElementById('includeVariations').checked,
+                    changes: document.getElementById('includeChanges').checked,
+                    goals: document.getElementById('includeGoals').checked,
+                    locations: document.getElementById('includeLocations').checked,
+                    audiences: document.getElementById('includeAudiences').checked,
+                    hypotheses: document.getElementById('includeHypotheses').checked,
+                    observations: document.getElementById('includeObservations').checked,
+                    tags: document.getElementById('includeTags').checked,
+                    cdnImages: document.getElementById('includeCdnImages').checked
+                };
+
+                if (!accountId) {
+                    throw new Error('Account ID is required');
+                }
+
+                setStatus('Fetching data from Convert API...', 'info');
+                const timestamp = new Date().toISOString().split('T')[0];
+
+                // Get projects first
+                log('Fetching projects...', 'info');
+                let projects = await fetchProjects(accountId);
+
+                // Filter to specific project if provided
+                if (projectIdFilter) {
+                    projects = projects.filter(p => p.id === projectIdFilter);
+                    if (projects.length === 0) {
+                        throw new Error(`Project ${projectIdFilter} not found`);
+                    }
+                }
+                log(`Found ${projects.length} project(s)`, 'success');
+
+                // Export projects
+                exportAsCSV(projects.map(p => ({
+                    id: p.id,
+                    name: p.name,
+                    status: p.status || '',
+                    createdAt: p.created_at || p.createdAt || '',
+                    updatedAt: p.updated_at || p.updatedAt || ''
+                })), `convert_projects_${timestamp}.csv`);
+
+                // Fetch experiences (needed for many other exports)
+                let experiences = [];
+                if (options.experiences || options.sections || options.sectionVersions ||
+                    options.variations || options.changes || options.hypotheses || options.observations) {
+                    experiences = await fetchExperiences(accountId, projects);
+
+                    if (options.experiences) {
+                        exportAsCSV(experiences.map(exp => ({
+                            id: exp.id,
+                            name: exp.name,
+                            type: exp.type,
+                            status: exp.status,
+                            projectId: exp.projectId || '',
+                            projectName: exp.projectName || '',
+                            createdAt: exp.created_at || exp.createdAt || '',
+                            updatedAt: exp.updated_at || exp.updatedAt || '',
+                            startedAt: exp.started_at || exp.startedAt || '',
+                            stoppedAt: exp.stopped_at || exp.stoppedAt || '',
+                            description: exp.description || ''
+                        })), `convert_experiences_${timestamp}.csv`);
+                    }
+                }
+
+                // Fetch sections (needed for section versions)
+                let sections = [];
+                if (options.sections || options.sectionVersions) {
+                    sections = await fetchSections(accountId, experiences);
+
+                    if (options.sections) {
+                        exportAsCSV(sections.map(s => ({
+                            id: s.id,
+                            name: s.name || '',
+                            experienceId: s.experienceId,
+                            experienceName: s.experienceName || '',
+                            projectId: s.projectId,
+                            type: s.type || '',
+                            status: s.status || ''
+                        })), `convert_sections_${timestamp}.csv`);
+                    }
+                }
+
+                // Export section versions
+                if (options.sectionVersions && sections.length > 0) {
+                    const sectionVersions = await fetchSectionVersions(accountId, sections);
+                    exportAsCSV(sectionVersions.map(v => ({
+                        id: v.id,
+                        name: v.name || '',
+                        sectionId: v.sectionId,
+                        experienceId: v.experienceId,
+                        projectId: v.projectId,
+                        status: v.status || ''
+                    })), `convert_section_versions_${timestamp}.csv`);
+                }
+
+                // Export variations
+                if (options.variations && experiences.length > 0) {
+                    const variations = await fetchVariations(accountId, experiences);
+                    exportAsCSV(variations.map(v => ({
+                        id: v.id,
+                        name: v.name || '',
+                        experienceId: v.experienceId,
+                        experienceName: v.experienceName || '',
+                        projectId: v.projectId,
+                        weight: v.weight || '',
+                        isControl: v.is_control || v.isControl || false,
+                        status: v.status || ''
+                    })), `convert_variations_${timestamp}.csv`);
+                }
+
+                // Export changes
+                if (options.changes && experiences.length > 0) {
+                    const changes = await fetchChanges(accountId, experiences);
+                    exportAsCSV(changes.map(c => ({
+                        id: c.id,
+                        experienceId: c.experienceId,
+                        experienceName: c.experienceName || '',
+                        projectId: c.projectId,
+                        type: c.type || '',
+                        selector: c.selector || '',
+                        action: c.action || '',
+                        createdAt: c.created_at || c.createdAt || ''
+                    })), `convert_changes_${timestamp}.csv`);
+                }
+
+                // Export goals
+                if (options.goals) {
+                    const goals = await fetchGoals(accountId, projects);
+                    exportAsCSV(goals.map(g => ({
+                        id: g.id,
+                        name: g.name,
+                        type: g.type || '',
+                        projectId: g.projectId,
+                        projectName: g.projectName || '',
+                        status: g.status || '',
+                        trigger: g.trigger || '',
+                        selector: g.selector || ''
+                    })), `convert_goals_${timestamp}.csv`);
+                }
+
+                // Export locations
+                if (options.locations) {
+                    const locations = await fetchLocations(accountId, projects);
+                    exportAsCSV(locations.map(l => ({
+                        id: l.id,
+                        name: l.name || '',
+                        projectId: l.projectId,
+                        projectName: l.projectName || '',
+                        type: l.type || '',
+                        matchType: l.match_type || l.matchType || '',
+                        value: l.value || '',
+                        status: l.status || ''
+                    })), `convert_locations_${timestamp}.csv`);
+                }
+
+                // Export audiences
+                if (options.audiences) {
+                    const audiences = await fetchAudiences(accountId, projects);
+                    exportAsCSV(audiences.map(a => ({
+                        id: a.id,
+                        name: a.name || '',
+                        projectId: a.projectId,
+                        projectName: a.projectName || '',
+                        description: a.description || '',
+                        conditions: JSON.stringify(a.conditions || []),
+                        status: a.status || ''
+                    })), `convert_audiences_${timestamp}.csv`);
+                }
+
+                // Export hypotheses
+                if (options.hypotheses && experiences.length > 0) {
+                    const hypotheses = await fetchHypotheses(accountId, experiences);
+                    exportAsCSV(hypotheses.map(h => ({
+                        id: h.id,
+                        experienceId: h.experienceId,
+                        experienceName: h.experienceName || '',
+                        projectId: h.projectId,
+                        hypothesis: h.hypothesis || h.text || '',
+                        status: h.status || ''
+                    })), `convert_hypotheses_${timestamp}.csv`);
+                }
+
+                // Export observations
+                if (options.observations && experiences.length > 0) {
+                    const observations = await fetchObservations(accountId, experiences);
+                    exportAsCSV(observations.map(o => ({
+                        id: o.id,
+                        experienceId: o.experienceId,
+                        experienceName: o.experienceName || '',
+                        projectId: o.projectId,
+                        observation: o.observation || o.text || '',
+                        createdAt: o.created_at || o.createdAt || ''
+                    })), `convert_observations_${timestamp}.csv`);
+                }
+
+                // Export tags
+                if (options.tags) {
+                    const tags = await fetchTags(accountId, projects);
+                    exportAsCSV(tags.map(t => ({
+                        id: t.id,
+                        name: t.name || '',
+                        projectId: t.projectId,
+                        projectName: t.projectName || '',
+                        color: t.color || ''
+                    })), `convert_tags_${timestamp}.csv`);
+                }
+
+                // Export CDN images
+                if (options.cdnImages) {
+                    const images = await fetchCdnImages(accountId, projects);
+                    exportAsCSV(images.map(i => ({
+                        id: i.id,
+                        name: i.name || '',
+                        projectId: i.projectId,
+                        projectName: i.projectName || '',
+                        url: i.url || '',
+                        createdAt: i.created_at || i.createdAt || ''
+                    })), `convert_cdn_images_${timestamp}.csv`);
+                }
+
+                log('=== Export complete! ===', 'success');
+                setStatus('Export complete! Check your downloads folder.', 'success');
+
+            } catch (error) {
+                log(`Export failed: ${error.message}`, 'error');
+                setStatus(`Export failed: ${error.message}`, 'error');
+            } finally {
+                fetchBtn.disabled = false;
+            }
+        }
+
+        // Load saved credentials from localStorage
+        function loadSavedCredentials() {
+            const saved = localStorage.getItem('convert_api_credentials');
+            if (saved) {
+                try {
+                    const creds = JSON.parse(saved);
+                    document.getElementById('appId').value = creds.appId || '';
+                    document.getElementById('accountId').value = creds.accountId || '';
+                    document.getElementById('projectId').value = creds.projectId || '';
+
+                    // Load secret key if it was saved
+                    if (creds.secretKey) {
+                        document.getElementById('secretKey').value = creds.secretKey;
+                        document.getElementById('rememberSecret').checked = true;
+                        log('Loaded saved credentials (including secret key)', 'info');
+                    } else {
+                        log('Loaded saved credentials', 'info');
+                    }
+                } catch (e) {
+                    // Ignore parse errors
+                }
+            }
+        }
+
+        // Save credentials to localStorage
+        function saveCredentials() {
+            const rememberSecret = document.getElementById('rememberSecret').checked;
+            const creds = {
+                appId: document.getElementById('appId').value,
+                accountId: document.getElementById('accountId').value,
+                projectId: document.getElementById('projectId').value
+            };
+
+            // Only save secret key if checkbox is checked
+            if (rememberSecret) {
+                creds.secretKey = document.getElementById('secretKey').value;
+            }
+
+            localStorage.setItem('convert_api_credentials', JSON.stringify(creds));
+        }
+
+        // Auto-save on input change
+        document.getElementById('appId').addEventListener('input', saveCredentials);
+        document.getElementById('secretKey').addEventListener('input', saveCredentials);
+        document.getElementById('accountId').addEventListener('input', saveCredentials);
+        document.getElementById('projectId').addEventListener('input', saveCredentials);
+        document.getElementById('rememberSecret').addEventListener('change', saveCredentials);
+
+        // Load on page load
+        loadSavedCredentials();
+    </script>
+</body>
+</html>
