@@ -7,3 +7,7 @@ config.local.js
 .vscode/settings.json
 _data*/
 _DATA/
+
+# Amplitude results (client chart IDs / cached results)
+charts.json
+results-cache*.json

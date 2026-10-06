@@ -78,6 +78,7 @@ body {
 
 
 .data-source-toggle-external {
+    position: relative;
     background-color: transparent;
     padding: 0;
     border-radius: 0;
@@ -396,6 +397,15 @@ h1 {
     border: 2px solid var(--surface);
 }
 
+/* A pop when an entry is added, since adding doesn't leave the current tab. */
+.rerun-count-badge.count-flash {
+    animation: countFlash 0.5s ease-out;
+}
+
+@keyframes countFlash {
+    40% { transform: scale(1.35); }
+}
+
 .tab-label {
     text-align: center;
     line-height: 1.3;
@@ -708,6 +718,11 @@ tr.checkbox-selected {
     background-color: var(--hover-blue);
 }
 
+/* The whole row opens its rerun panel on a scenario tab. */
+tr.row-draftable {
+    cursor: pointer;
+}
+
 /* Brief pulse when a row is jumped to from the rerun panel's "view" action. */
 tr.row-flash {
     animation: rowFlash 1.2s ease-out;
@@ -742,6 +757,14 @@ tr.row-flash {
     white-space: nowrap;
 }
 
+/* Centred with trimmed padding, so the pill sits evenly inside the lit
+   signal box (inset 6px from the cell edge) rather than overflowing it. */
+td.col-decision {
+    padding-left: 8px;
+    padding-right: 8px;
+    text-align: center;
+}
+
 .decision-shipped {
     color: var(--success);
     background-color: rgba(40, 167, 69, 0.12);
@@ -752,12 +775,8 @@ tr.row-flash {
     background-color: var(--surface-control);
 }
 
-/* Change: what the variation did. Free text, so it is clamped to two lines and
-   the full value lives in the cell's title attribute. */
-td.col-change {
-    padding-right: 12px;
-}
-
+/* Change: what the variation did, under the experiment name. Free text, so it
+   is clamped to two lines and the full value lives in its tooltip (data-tip). */
 .change-text {
     display: -webkit-box;
     -webkit-line-clamp: 2;
@@ -766,12 +785,14 @@ td.col-change {
     font-size: 12.5px;
     line-height: 1.4;
     color: var(--text-muted);
+    margin: 2px 0;
 }
 
-/* Give the Launched column breathing room on both sides, right-aligned */
+/* Right-aligned, so the left padding is only slack: kept small so a full
+   date fits, with the right side giving room before the Method column. */
 td.col-started,
 th.col-started {
-    padding-left: 20px;
+    padding-left: 8px;
     padding-right: 20px;
     text-align: right;
 }
@@ -797,7 +818,6 @@ th.col-power {
 }
 
 .trigger-icon-wrap {
-    position: relative;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -814,45 +834,50 @@ th.col-power {
     opacity: 0.86;
 }
 
-/* Immediate custom tooltip on top of the icon (no browser hover delay). */
-.trigger-icon-wrap::after {
-    content: attr(data-tip);
-    position: absolute;
-    bottom: calc(100% + 6px);
-    left: 50%;
-    transform: translateX(-50%);
+/* Shared tooltip for every [data-tip] element (see initTooltips in index.html).
+   A single node on <body>, positioned with JS, so it shows immediately (no
+   browser title delay), works on SVGs, and isn't clipped by the table. */
+.tooltip {
+    position: fixed;
+    top: 0;
+    left: 0;
+    max-width: 280px;
+    width: max-content;
     padding: 4px 8px;
     background-color: var(--text-strong);
     color: #fff;
     font-size: 11px;
-    line-height: 1;
-    white-space: nowrap;
+    line-height: 1.3;
     border-radius: 4px;
     opacity: 0;
     visibility: hidden;
     pointer-events: none;
-    z-index: 10;
+    z-index: 1000;
 }
 
-/* Small arrow pointing down to the icon. */
-.trigger-icon-wrap::before {
+.tooltip.visible {
+    opacity: 1;
+    visibility: visible;
+}
+
+/* Small arrow pointing at the element; --arrow-x follows the element's centre
+   when the tooltip is nudged to stay inside the viewport. */
+.tooltip::after {
     content: "";
     position: absolute;
-    bottom: calc(100% + 2px);
-    left: 50%;
+    top: 100%;
+    left: var(--arrow-x, 50%);
     transform: translateX(-50%);
     border: 4px solid transparent;
     border-top-color: var(--text-strong);
-    opacity: 0;
-    visibility: hidden;
-    pointer-events: none;
-    z-index: 10;
 }
 
-.trigger-icon-wrap:hover::after,
-.trigger-icon-wrap:hover::before {
-    opacity: 1;
-    visibility: visible;
+/* Flipped below the element when there's no room above. */
+.tooltip.below::after {
+    top: auto;
+    bottom: 100%;
+    border-top-color: transparent;
+    border-bottom-color: var(--text-strong);
 }
 
 .iteration-dots {
@@ -888,7 +913,7 @@ th.col-power {
     align-items: flex-start;
 }
 
-/* Fixed-width micro-columns so the 3 stats stay aligned regardless of digits */
+/* Fixed width so the power badge stays aligned regardless of digits */
 .power-col {
     display: flex;
     flex-direction: column;
@@ -911,12 +936,6 @@ th.col-power {
     padding: 3px 7px;
     min-width: 40px;
     text-align: center;
-}
-
-.power-stat-value {
-    font-size: 16px;
-    font-weight: 700;
-    white-space: nowrap;
 }
 
 .power-stat-label {
@@ -959,7 +978,8 @@ th.col-power {
 .owner-link {
     color: var(--accent);
     text-decoration: none;
-    font-size: 14px;
+    font-size: 12px;
+    overflow-wrap: anywhere;
 }
 
 .owner-link:hover {
@@ -1007,12 +1027,21 @@ tbody td:has(> .experiment-name-container) {
     gap: 8px;
 }
 
-/* Overflow button: present on every tab at the right edge of the name cell.
-   It opens the row action menu (View Report / rerun actions). */
+/* First column: the rerun button with the row's overflow button under it.
+   Positioned so the overflow menu can hang off it. */
+.row-controls {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+}
+
+/* Overflow button: present on every tab under the rerun button. It opens the
+   row action menu (View Report / rerun actions). */
 .rerun-menu-btn {
     display: inline-flex;
     flex: 0 0 auto;
-    margin-left: auto;
     width: 26px;
     height: 26px;
     padding: 0;
@@ -1041,8 +1070,8 @@ tbody td:has(> .experiment-name-container) {
    positioning context, so the menu hangs just under the button's right edge. */
 .row-action-menu {
     position: absolute;
-    top: calc(50% + 16px);
-    right: 8px;
+    top: calc(100% + 4px);
+    left: 0;
     z-index: 60;
     min-width: 200px;
     padding: 6px;
@@ -1114,11 +1143,41 @@ tbody td:has(> .experiment-name-container) {
     gap: 6px;
 }
 
+.experiment-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
 .experiment-id {
     font-size: 11px;
     font-weight: 400;
     color: var(--text-faint);
     font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+}
+
+/* Method column: badge + short name, full description in the tooltip. */
+td.col-method,
+th.col-method {
+    padding-left: 8px;
+    padding-right: 8px;
+    white-space: nowrap;
+}
+
+.test-method {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.test-method-icon {
+    flex-shrink: 0;
+    color: #b4b9c5;
+}
+
+.test-method-label {
+    font-size: 12px;
+    color: var(--text-muted);
 }
 
 .metric-container {
@@ -1427,6 +1486,17 @@ tr.sub-row.highlighted-row .sub-row-name {
     letter-spacing: 0.1em;
 }
 
+.form-hint {
+    margin-top: 6px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: #555;
+}
+
+.form-hint:empty {
+    display: none;
+}
+
 .radio-group {
     display: flex;
     flex-direction: column;
@@ -1583,6 +1653,13 @@ tr.sub-row.highlighted-row .sub-row-name {
 
 .rerun-tag-cell {
     white-space: nowrap;
+}
+
+/* Metric values are right-aligned, so their toggle sits flush right under
+   them, on the same 12px right edge as the value. */
+.rerun-tag-row > td.col-metric {
+    text-align: right;
+    padding-right: 12px;
 }
 
 .rerun-tag-cell .rerun-tag + .rerun-tag {
@@ -1843,6 +1920,48 @@ tbody tr.rerun-note-row:hover > td {
     background-color: var(--hover-blue);
 }
 
+/* The panel's one action, after the type picker: Rerun on a draft (adds it to
+   the list), Remove on an entry in the Rerun tab. The top margin clears the
+   picker's "Test type" label so the button lines up with the dropdown. */
+.rerun-panel-btn {
+    flex: 0 0 auto;
+    margin-top: 19px;
+    padding: 6px 16px;
+    font-family: inherit;
+    font-size: 12.5px;
+    font-weight: 600;
+    border-radius: 7px;
+    cursor: pointer;
+    transition: background-color 0.1s, border-color 0.1s, color 0.1s;
+}
+
+.rerun-panel-btn-add {
+    color: #fff;
+    background-color: var(--accent);
+    border: 1px solid var(--accent);
+}
+
+.rerun-panel-btn-add:hover {
+    background-color: var(--accent-dark);
+    border-color: var(--accent-dark);
+}
+
+.rerun-panel-btn-remove {
+    color: var(--text-muted);
+    background-color: var(--field-tint);
+    border: 1px solid var(--border);
+}
+
+.rerun-panel-btn-remove:hover {
+    color: #dc3545;
+    border-color: #dc3545;
+}
+
+.rerun-panel-btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+}
+
 
 .btn-secondary {
     background-color: var(--surface-control);
@@ -1926,6 +2045,10 @@ tbody tr.rerun-note-row:hover > td {
     display: flex;
     align-items: flex-end;
     gap: 10px;
+    /* One column's height (56px bar area + 16px label row), reserved even when
+       there is no data to chart, so the bar -- and the tabs below it -- don't
+       jump when switching to a tab with nothing to summarise. */
+    min-height: 72px;
 }
 
 .summary-threshold-column {
@@ -1980,6 +2103,9 @@ tbody tr.rerun-note-row:hover > td {
     font-size: 24px;
     font-weight: 800;
     color: var(--text-strong);
+    /* Keeps its line when empty, for the same reason as the chart above. */
+    line-height: 1.25;
+    min-height: 1.25em;
 }
 
 .summary-metric-value.metric-good,
@@ -2314,4 +2440,58 @@ tbody tr.rerun-note-row:hover > td {
 
 .pagination-select:hover {
     border-color: var(--text-muted);
+}
+
+/* Hangs below the toggle, out of the flow, so its length never shifts the
+   search box or toggle sideways. */
+.import-status {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 8px;
+    line-height: 1.5;
+    font-size: 11px;
+    color: #555;
+    text-align: right;
+    white-space: nowrap;
+}
+
+.import-status:empty {
+    display: none;
+}
+
+/* The status hangs out of the flow, so reserve room for its two lines. */
+.header-controls:has(.import-status:not(:empty)) {
+    margin-bottom: 34px;
+}
+
+.import-status-refresh {
+    padding: 0;
+    border: none;
+    background: none;
+    font: inherit;
+    color: var(--accent);
+    cursor: pointer;
+}
+
+.import-status-refresh:hover {
+    text-decoration: underline;
+}
+
+.amplitude-results {
+    margin-top: 16px;
+}
+
+.amplitude-results-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.amplitude-results-row .btn {
+    white-space: nowrap;
+}
+
+.amplitude-results-row .form-hint {
+    margin-top: 0;
 }

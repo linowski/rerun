@@ -2,6 +2,7 @@
   {
     "name": "Product Page CTA Redesign",
     "id": "exp_product_cta",
+    "testMethod": "fixed",
     "date": "2025-06-03",
     "change": "Replaced text link with a full-width button above the fold",
     "decision": "Not Shipped",
@@ -28,6 +29,7 @@
   {
     "name": "Checkout Flow Simplification",
     "id": "exp_checkout_flow",
+    "testMethod": "sequential",
     "date": "2025-05-21",
     "change": "Collapsed 3 checkout steps into a single page",
     "decision": "Not Shipped",
@@ -54,6 +56,7 @@
   {
     "name": "Homepage Hero Banner Test",
     "id": "exp_hero_banner",
+    "testMethod": "fixed",
     "date": "2025-04-14",
     "change": "Swapped lifestyle photo for product shot with price",
     "decision": "Shipped",
@@ -77,6 +80,7 @@
   {
     "name": "Homepage Redesign",
     "id": "exp_homepage_redesign",
+    "testMethod": "fixed",
     "date": "2025-03-30",
     "change": "Full homepage rebuild: new nav, hero and module order",
     "decision": "Not Shipped",
@@ -103,6 +107,7 @@
   {
     "name": "Mobile Navigation Update",
     "id": "exp_mobile_nav",
+    "testMethod": "fixed",
     "date": "2025-03-12",
     "change": "Moved nav to a bottom bar with 5 fixed items",
     "decision": "Shipped",
@@ -129,6 +134,7 @@
   {
     "name": "Mobile Icons With Labels",
     "id": "exp_mobile_icons",
+    "testMethod": "fixed",
     "date": "2025-02-25",
     "change": "Added text labels under each nav icon",
     "decision": "Not Shipped",
@@ -158,6 +164,7 @@
   {
     "name": "Carousel Images",
     "id": "exp_carousel_images",
+    "testMethod": "fixed",
     "date": "2025-02-08",
     "change": "Auto-rotating carousel replaced with a static hero",
     "decision": "Not Shipped",
@@ -181,6 +188,7 @@
   {
     "name": "Email Subject Line Test",
     "id": "exp_email_subject",
+    "testMethod": "fixed",
     "date": "2025-01-19",
     "change": "Added recipient first name and urgency to the subject",
     "decision": "Not Shipped",
@@ -208,6 +216,7 @@
   {
     "name": "Search Bar Placement",
     "id": "exp_search_bar",
+    "testMethod": "fixed",
     "date": "2024-12-15",
     "change": "Moved search from the menu into the header bar",
     "decision": "Not Shipped",
@@ -234,6 +243,7 @@
   {
     "name": "Footer Link Redesign",
     "id": "exp_footer_links",
+    "testMethod": "fixed",
     "date": "2024-11-28",
     "change": "Regrouped footer links into 4 labelled columns",
     "decision": "Not Shipped",
@@ -257,6 +267,7 @@
   {
     "name": "Pricing Page Layout Test",
     "id": "exp_pricing_layout",
+    "testMethod": "sequential",
     "date": "2024-11-05",
     "change": "Three pricing tiers side by side instead of stacked",
     "decision": "Not Shipped",
@@ -294,6 +305,7 @@
   {
     "name": "Add To Cart Button Styles",
     "id": "exp_atc_buttons",
+    "testMethod": "fixed",
     "date": "2024-10-17",
     "change": "Solid high-contrast button replacing the outlined one",
     "decision": "Shipped",
@@ -337,6 +349,7 @@
   {
     "name": "Landing Page Headline Test",
     "id": "exp_lp_headline",
+    "testMethod": "fixed",
     "date": "2024-09-24",
     "change": "Benefit-led headline replacing the feature-led one",
     "decision": "Not Shipped",
@@ -385,6 +398,7 @@
   {
     "name": "Guest Checkout Option",
     "id": "exp_guest_checkout",
+    "testMethod": "hybrid",
     "date": "2025-08-19",
     "change": "Added a guest option ahead of account creation",
     "decision": "Not Shipped",
@@ -411,6 +425,7 @@
   {
     "name": "Sticky Add To Cart Bar",
     "id": "exp_sticky_atc",
+    "testMethod": "fixed",
     "date": "2025-04-22",
     "change": "Add-to-cart bar pinned to the viewport on scroll",
     "decision": "Shipped",
@@ -435,6 +450,7 @@
   {
     "name": "Newsletter Signup Copy",
     "id": "exp_newsletter_copy",
+    "testMethod": "fixed",
     "date": "2025-02-11",
     "change": "Rewrote the signup prompt around a content benefit",
     "decision": "Not Shipped",
@@ -458,6 +474,7 @@
   {
     "name": "Autoplay Product Video",
     "id": "exp_autoplay_video",
+    "testMethod": "fixed",
     "date": "2025-05-30",
     "change": "Product video autoplays muted on page load",
     "decision": "Not Shipped",
@@ -484,6 +501,7 @@
   {
     "name": "Shipping Threshold Messaging",
     "id": "exp_shipping_threshold",
+    "testMethod": "fixed",
     "date": "2025-07-08",
     "change": "Banner showing spend remaining for free shipping",
     "decision": "Not Shipped",
@@ -532,6 +550,7 @@
   {
     "name": "Testimonial Placement",
     "id": "exp_testimonial_place",
+    "testMethod": "fixed",
     "date": "2025-09-02",
     "change": "Moved testimonials above the fold",
     "decision": "Not Shipped",
@@ -555,6 +574,7 @@
   {
     "name": "One Tap Apple Pay",
     "id": "exp_one_tap_pay",
+    "testMethod": "fixed",
     "date": "2025-03-17",
     "change": "Apple Pay offered as the first checkout option",
     "decision": "Shipped",
@@ -578,6 +598,7 @@
   {
     "name": "Bundle Recommendations",
     "id": "exp_bundle_recs",
+    "testMethod": "fixed",
     "date": "2025-06-25",
     "change": "Added a \"frequently bought together\" bundle to the cart",
     "decision": "Not Shipped",
@@ -602,6 +623,7 @@
   {
     "name": "Search Autocomplete V3",
     "id": "exp_search_autocomplete",
+    "testMethod": "hybrid",
     "date": "2025-10-14",
     "change": "Autocomplete now suggests products, not just terms",
     "decision": "Not Shipped",
@@ -629,6 +651,7 @@
   {
     "name": "Interstitial Promo Modal",
     "id": "exp_promo_modal",
+    "testMethod": "fixed",
     "date": "2025-01-28",
     "change": "Promo modal on entry instead of an inline banner",
     "decision": "Not Shipped",

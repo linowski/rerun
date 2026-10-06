@@ -116,6 +116,7 @@ const GrowthBookMapper = {
             power: null,
             pvalue: this.extractPValue(experiment),
             iterations: variationCount - 1,
+            testMethod: this.extractTestMethod(experiment),
             triggered: experiment.targeting ? [{ type: 'page' }, { type: 'interaction' }] : [{ type: 'page' }],
             traffic: this.calculateTrafficPercentage(experiment),
             trafficSubtitle: experiment.targetingDescription || null,
@@ -260,6 +261,17 @@ const GrowthBookMapper = {
 
         // Fallback to basic results
         return experiment.results?.[0]?.pValue || experiment.pValue || null;
+    },
+
+    // 'fixed' | 'sequential' | 'bayesian' from the analysis settings, which
+    // the experiment carries and its results repeat; null when neither says.
+    extractTestMethod(experiment) {
+        const settings = experiment.settings?.statsEngine
+            ? experiment.settings
+            : experiment.detailedResults?.result?.settings;
+        if (settings?.statsEngine === 'bayesian') return 'bayesian';
+        if (settings?.statsEngine !== 'frequentist') return null;
+        return settings.sequentialTestingEnabled ? 'sequential' : 'fixed';
     },
 
     /**

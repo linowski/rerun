@@ -14,7 +14,8 @@ A browser-based experimentation dashboard that analyzes A/B test results from mu
 {
   name, id, primaryMetric, primaryMetricLabel, primaryMetricType,  // "binary" | "continuous"
   secondaryMetric, secondaryMetricLabel, secondaryMetricType,
-  sampleSize, baseRate, triggered, traffic, trafficSubtitle, owner
+  sampleSize, baseRate, triggered, traffic, trafficSubtitle, owner,
+  testMethod  // "fixed" | "sequential" | "hybrid" | "bayesian" | null (unknown: no icon)
 }
 ```
 
@@ -24,6 +25,7 @@ A browser-based experimentation dashboard that analyzes A/B test results from mu
 - `convert-csv-mapper.js` — Convert.com CSV export (has `parseCSV()` + `mapRows()`)
 - `eppo-mapper.js` — Eppo API
 - `absmartly-mapper.js` — ABsmartly API
+- `amplitude-mapper.js` — Amplitude Experiment Management API (`fetchExperiments()` lists experiments; `fetchResults()` attaches `use_amp_experiments` analyze output as `analysis`). `AmplitudeMapper.mcp` is the browser OAuth (PKCE) sign-in + JSON-RPC client for Amplitude's MCP server; tokens in sessionStorage
 
 All API mappers expose: `mapExperiment(raw) → standardized` and `mapExperiments(array) → array`
 
@@ -32,8 +34,6 @@ All API mappers expose: `mapExperiment(raw) → standardized` and `mapExperiment
 - `styles.css` — All styles (single file)
 - `stats-utils.js` — Statistical functions: power calculations, p-value recalculation, Type M/S errors, erf/normalCDF/normalPDF
 - `mappers/mapper-utils.js` — Shared mapper helpers for platform API normalization
-- `config.js` — API keys (should be in .gitignore)
-- `config.example.js` — Safe local config template
 - `data.json` — Dummy experiment data in standardized format
 
 ## Statistical Functions (stats-utils.js)
@@ -52,8 +52,9 @@ All API mappers expose: `mapExperiment(raw) → standardized` and `mapExperiment
 ## UI Conventions
 - Color spectrum: red (#dc3545) -> orange (#e0a800) -> green (#28a745) for good/bad indicators
 - `sensitivityColor(pct)` — Smooth RGB blend for 0-100% values
-- `blendToRed(t)` — Gray-to-red blend for Type M/S danger values
-- Power column shows 3 micro columns: power %, exaggeration (Type M), wrong sign (Type S)
+- Power column shows the power % badge with the MDE under it (Type M/S are not displayed)
+- Tooltips: put the text in a `data-tip` attribute (never `title`); `initTooltips()` in `index.html` renders one shared `.tooltip` for all of them
+- Rerun list: a row's rerun button opens a draft panel (nothing is saved yet); the panel's **Rerun** button adds an entry to `rerunInstances`. A test can have many entries, and the Rerun tab shows one row per entry (each with **Remove**). Details (origin/notes/tags/type) live in `rerunDetails`, keyed by instance id, or by `draftEntryKey(selectionKey)` for drafts
 - Tabs are scenario filters (Almost Significant, Squeeze The Lemon, etc.) that highlight matching rows
 
 ## Styling Preferences
