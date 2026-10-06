@@ -992,6 +992,18 @@
             return 'draft:' + selectionKey;
         }
 
+        // The data row behind an entry key, be it a committed instance id or a
+        // draft's "draft:<selectionKey>". Used to refresh a row's own icon when
+        // its test type changes without a full re-render.
+        function rowForEntryKey(entryKey) {
+            if (entryKey.startsWith('draft:')) {
+                const selectionKey = entryKey.slice('draft:'.length);
+                return tableBody.querySelector(
+                    `tr[data-selection-key="${CSS.escape(selectionKey)}"]:not([data-instance-id])`);
+            }
+            return tableBody.querySelector(`tr[data-instance-id="${CSS.escape(entryKey)}"]`);
+        }
+
         function rerunInstanceCount(selectionKey) {
             return rerunInstances.filter(inst => inst.key === selectionKey).length;
         }
@@ -1084,19 +1096,32 @@
                 description: 'Rerun the experiment as it was.',
                 // No diagram: the structure is unchanged, so there is nothing to
                 // show. The circles are there to describe a *new* shape.
-                variants: []
+                variants: [],
+                icon: '='
+            },
+            {
+                id: 'meta-analyze',
+                label: 'Same as original + Meta-analyze',
+                description: 'Combine with the original run for more power.',
+                variants: [
+                    { text: 'A' }, { text: 'B' },
+                    { split: true }, { text: 'A' }, { text: 'B' }
+                ],
+                icon: '+='
             },
             {
                 id: 'single-variable',
                 label: 'Single-Variable',
                 description: 'Single change A/B test.',
-                variants: [{ text: 'A' }, { text: 'B' }]
+                variants: [{ text: 'A' }, { text: 'B' }],
+                icon: 'A/B'
             },
             {
                 id: 'exploratory',
                 label: 'Exploratory',
                 description: 'Several variations tested at once.',
-                variants: [{ text: 'A' }, { text: 'B' }, { text: 'C' }, { text: 'D' }]
+                variants: [{ text: 'A' }, { text: 'B' }, { text: 'C' }, { text: 'D' }],
+                icon: 'ABC'
             },
             {
                 id: 'exploratory-confirmatory',
@@ -1104,45 +1129,59 @@
                 description: 'Lower power first, higher power second.',
                 variants: [
                     { text: 'A' }, { text: 'b', muted: true }, { text: 'c', muted: true },
-                    { split: true }, { text: 'A' }, { text: 'B' }
-                ]
+                    { split: 'sequence' }, { text: 'A' }, { text: 'B' }
+                ],
+                icon: 'x→x'
             },
             {
                 id: 'leap-compound',
                 label: 'Leap Compound',
                 description: 'Multiple simultaneous changes in one variant.',
-                variants: [{ text: 'A' }, { text: 'B', strong: true }]
+                variants: [{ text: 'A' }, { text: 'B', strong: true }],
+                icon: 'x+y+z'
             },
             {
                 id: 'intensify',
                 label: 'Intensify',
                 description: 'The same change, turned up.',
-                variants: [{ text: 'A' }, { text: 'B+' }]
+                variants: [{ text: 'A' }, { text: 'B*2' }],
+                icon: 'x*2'
             },
             {
                 id: 'reduce',
                 label: 'Reduce',
                 description: 'The same change, turned down.',
-                variants: [{ text: 'A' }, { text: 'B−' }]
+                variants: [{ text: 'A' }, { text: 'B/2' }],
+                icon: 'x/2'
             },
             {
                 id: 'remove',
                 label: 'Remove',
                 description: 'Take the element away entirely.',
                 // The empty set marks the arm where the element is gone.
-                variants: [{ text: 'A' }, { text: '∅', muted: true }]
+                variants: [{ text: 'A' }, { text: '∅', muted: true }],
+                icon: '∅'
+            },
+            {
+                id: 'invert',
+                label: 'Invert',
+                description: 'Do the opposite of the original change.',
+                variants: [{ text: 'A' }, { text: '−B' }],
+                icon: '−x'
             },
             {
                 id: 'intensity',
-                label: 'Intensity',
+                label: 'Elasticity',
                 description: 'One change at varying strengths.',
-                variants: [{ text: 'A' }, { text: 'B+' }, { text: 'B++' }]
+                variants: [{ text: 'A' }, { text: 'B+' }, { text: 'B++' }],
+                icon: 'x++'
             },
             {
                 id: 'cascade',
                 label: 'Cascade',
                 description: 'Each change builds on the last.',
-                variants: [{ text: 'A' }, { text: 'B' }, { text: 'C' }, { text: 'D' }]
+                variants: [{ text: 'A' }, { text: 'B' }, { text: 'B+C' }],
+                icon: 'x→x\''
             }
         ];
 
@@ -1150,6 +1189,17 @@
         // A rerun repeats the original unless you say otherwise, so this is the
         // default rather than an empty prompt.
         const DEFAULT_RERUN_TYPE = 'same-as-original';
+
+        // A tab's own best guess at how its rerun should be structured: `default`
+        // pre-fills a fresh draft (overridden the moment someone picks anything
+        // else), and `alternates` are bolded in the dropdown as other options
+        // worth considering for that scenario. The dropdown itself still offers
+        // every type either way.
+        const TAB_RECOMMENDED_RERUN_TYPES = {
+            'almost-significant': { default: 'meta-analyze', alternates: ['leap-compound'] },
+            lemon: { default: 'intensity', alternates: ['intensify', 'leap-compound'] },
+            'big-losers': { default: 'invert', alternates: ['reduce', 'remove'] }
+        };
 
         function rerunTypeFor(key) {
             return detailFor(key).type || DEFAULT_RERUN_TYPE;
@@ -1167,7 +1217,10 @@
         function buildVariantDiagram(type) {
             return el('span', { class: 'rerun-type-variants', 'aria-hidden': 'true' },
                 type.variants.map(variant => variant.split
-                    ? el('span', { class: 'rerun-type-split', textContent: '+' })
+                    // '+' for combining two runs (meta-analyze); '→' for one
+                    // run following from another (exploratory-confirmatory,
+                    // cascade's own A→B arms stay as separate circles).
+                    ? el('span', { class: 'rerun-type-split', textContent: variant.split === 'sequence' ? '→' : '+' })
                     : el('span', {
                         class: 'rerun-type-variant'
                             + (variant.muted ? ' is-muted' : '')
@@ -1187,6 +1240,14 @@
             const type = RERUN_TYPE_BY_ID.get(current);
             const selectId = 'rerun-type-' + encodeURIComponent(key);
 
+            // Options for the entry's own origin tab's default and alternates
+            // are bolded, so the types most likely to fit this scenario stand
+            // out without hiding the rest of the list.
+            const recommended = TAB_RECOMMENDED_RERUN_TYPES[detailFor(key).origin];
+            const recommendedIds = recommended
+                ? new Set([recommended.default, ...recommended.alternates])
+                : null;
+
             const select = el('select', {
                 // A chosen structure reads as a decision, so it fills like the tag
                 // toggles do; the default stays quiet.
@@ -1195,19 +1256,19 @@
                 dataset: { entryKey: key }
             // Label only: the description is shown beneath the control.
             }, RERUN_TYPES.map(t => el('option', {
-                value: t.id, textContent: t.label, selected: t.id === current
+                value: t.id,
+                textContent: t.label,
+                selected: t.id === current,
+                class: recommendedIds?.has(t.id) ? 'rerun-type-option-recommended' : null
             })));
 
+            // Label, dropdown, diagram and description all on one line: the
+            // row's own icon (applyRerunButtonState) already carries the chosen
+            // type's glyph, so the picker doesn't repeat it.
             return el('div', { class: 'rerun-type-picker' }, [
-                // Label on its own line above the control.
                 el('label', { class: 'rerun-type-label', htmlFor: selectId, textContent: 'Test type' }),
-                // The diagram goes inside the select's own row, so the two are
-                // centred against each other rather than against the whole widget.
-                el('div', { class: 'rerun-type-select-row' }, [
-                    select,
-                    el('span', { class: 'rerun-type-preview' }, type && buildVariantDiagram(type))
-                ]),
-                // Description sits under the row, aligned to its left edge.
+                select,
+                el('span', { class: 'rerun-type-preview' }, type && buildVariantDiagram(type)),
                 el('span', { class: 'rerun-type-description', textContent: type ? type.description : '' })
             ]);
         }
@@ -1354,24 +1415,45 @@
             const active = !!state.instanceId || state.drafting || state.listedCount > 0;
             btn.classList.toggle('selected', active);
             const icon = btn.querySelector('.rerun-row-btn-icon');
-            if (!icon) return;
+            const typeEl = btn.querySelector('.rerun-row-btn-type');
+            if (!icon || !typeEl) return;
 
-            // On the Rerun tab an entry's button shows its originating scenario
-            // in full colour instead of the rerun glyph; elsewhere it's the rerun
-            // icon, dim until the row is drafted or on the list.
+            // The row's test type (default included) replaces the plain rerun
+            // arrow and the Rerun tab's origin-scenario icon, but only while the
+            // row is in its blue "open" state (drafting or committed) -- not
+            // merely because other entries for it are listed elsewhere.
+            const highlighted = !!state.instanceId || state.drafting;
+            const entryKey = state.instanceId || draftEntryKey(row.dataset.selectionKey);
+            const chosenType = highlighted ? RERUN_TYPE_BY_ID.get(rerunTypeFor(entryKey)) : null;
+            const showType = !!chosenType;
+            btn.classList.toggle('showing-type', showType);
+            typeEl.textContent = showType ? chosenType.icon : '';
+
+            // Which scenario the rerun was planned from (Almost Significant,
+            // Squeeze The Lemon, ...), as a small badge under the main button --
+            // shown whenever that's recorded (drafting or committed), not only
+            // once listed on the Rerun tab, since the main button now always
+            // shows the test type instead of standing in for the origin itself.
             const onRerunTab = getActiveTabType() === 'rerun';
-            const originSrc = state.instanceId && TAB_ORIGIN_ICON[detailFor(state.instanceId).origin];
-            const showOrigin = onRerunTab && originSrc;
-            btn.classList.toggle('showing-origin', !!showOrigin);
+            const origin = highlighted ? detailFor(entryKey).origin : null;
+            const originSrc = origin && TAB_ORIGIN_ICON[origin];
+            const showOrigin = !!originSrc;
+            const originEl = row.querySelector('.rerun-row-origin');
+            if (originEl) {
+                originEl.style.display = showOrigin ? '' : 'none';
+                if (showOrigin) originEl.src = originSrc;
+            }
+            // A second icon stacked under the first needs less of an upward
+            // nudge than a single icon does, or the pair reads too high.
+            originEl?.closest('.row-controls')?.classList.toggle('has-origin', showOrigin);
 
             // A parent row can appear on the Rerun tab purely as context for a
             // listed sub-row. Mark it so its button recedes instead of looking
             // like another actionable icon next to the coloured origin ones.
             btn.classList.toggle('context-only', onRerunTab && !state.instanceId);
 
-            icon.src = showOrigin
-                ? originSrc
-                : (active ? icon.dataset.selected : icon.dataset.default);
+            icon.style.display = showType ? 'none' : '';
+            icon.src = active ? icon.dataset.selected : icon.dataset.default;
         }
 
         function applySelectionState(row) {
@@ -1406,16 +1488,12 @@
         }
 
         // Keeps the rerun button's tooltip/label in step with what a click does.
-        // On the Rerun tab an entry's button shows its origin scenario (see
-        // applyRerunButtonState), so the tooltip names it.
         function applyRerunButtonTip(row, state) {
             const btn = row.querySelector('.rerun-row-btn');
             if (!btn) return;
             let text;
             if (state.instanceId) {
-                const label = btn.classList.contains('showing-origin')
-                    ? (TAB_CONFIG[detailFor(state.instanceId).origin]?.title || '') : '';
-                text = label ? `From: ${label}` : 'On rerun list';
+                text = 'On rerun list';
             } else if (state.drafting) {
                 text = 'Close rerun panel';
             } else if (state.listedCount > 0) {
@@ -1425,6 +1503,15 @@
             }
             btn.dataset.tip = text;
             btn.setAttribute('aria-label', text);
+
+            // The origin badge under it names the scenario it was planned from.
+            const originEl = row.querySelector('.rerun-row-origin');
+            if (originEl && originEl.style.display !== 'none') {
+                const entryKey = state.instanceId || draftEntryKey(row.dataset.selectionKey);
+                const label = TAB_CONFIG[detailFor(entryKey).origin]?.title || '';
+                if (label) originEl.dataset.tip = `From: ${label}`;
+                originEl.alt = label;
+            }
         }
 
         // Prunes against the whole dataset, not the rendered page. Pruning to
@@ -1515,7 +1602,15 @@
         function renderRerunButton() {
             return `<button type="button" class="rerun-row-btn" data-tip="Add to rerun list" aria-label="Add to rerun list">
                 <img src="images/iconRerun.svg" data-default="images/iconRerun.svg" data-selected="images/iconRerun_Sel.svg" alt="" class="rerun-row-btn-icon">
+                <span class="rerun-row-btn-type" aria-hidden="true"></span>
             </button>`;
+        }
+
+        // Sits under the rerun button on the Rerun tab: which scenario tab the
+        // entry was planned from (Almost Significant, Squeeze The Lemon, ...),
+        // now that the button above it shows the test type instead.
+        function renderOriginBadge() {
+            return `<img class="rerun-row-origin" alt="" style="display: none;">`;
         }
 
         // Every row carries an overflow button under its rerun button, in the
@@ -1571,7 +1666,7 @@
             if (experiment.url) row.dataset.reportUrl = experiment.url;
 
             row.innerHTML = `
-                <td class="col-select"><div class="row-controls">${renderRerunButton()}${renderRerunMenuButton()}</div></td>
+                <td class="col-select"><div class="row-controls">${renderRerunButton()}${renderOriginBadge()}${renderRerunMenuButton()}</div></td>
                 <td class="col-name">
                     <div class="experiment-name-container">
                         <div class="experiment-name-row">
@@ -1611,7 +1706,7 @@
             if (instanceId) row.dataset.instanceId = instanceId;
 
             row.innerHTML = `
-                <td class="col-select"><div class="row-controls">${renderRerunButton()}${renderRerunMenuButton()}</div></td>
+                <td class="col-select"><div class="row-controls">${renderRerunButton()}${renderOriginBadge()}${renderRerunMenuButton()}</div></td>
                 <td class="col-name">
                     <div class="experiment-name-container">
                         <div class="experiment-name-row">
@@ -1781,18 +1876,27 @@
         // Highlighting is applied to the rendered page only -- it is presentation.
         // Membership questions (counts, sort promotion) ask the data instead.
         function applyRowHighlighting(pageRows, tabType) {
-            if (tabType === 'rerun') return;
-            const config = TAB_CONFIG[tabType];
             // Rendered 1:1 with pageRows, and note/expand strips are added later.
             const rendered = tableBody.children;
 
             pageRows.forEach((viewRow, index) => {
                 const row = rendered[index];
-                if (!row || !rowMatchesTab(viewRow, tabType)) return;
+                if (!row) return;
+
+                // On the Rerun tab there is no single rule for the page -- each
+                // entry shows why its own origin tab thought it worth a rerun,
+                // using that tab's live thresholds rather than a snapshot.
+                const config = tabType === 'rerun'
+                    ? TAB_CONFIG[detailFor(viewRow.instanceId || '').origin]
+                    : TAB_CONFIG[tabType];
+                if (!config) return;
+
+                const matches = tabType === 'rerun' ? !!viewRow.instanceId : rowMatchesTab(viewRow, tabType);
+                if (!matches) return;
                 row.classList.add('highlighted-row');
 
                 const item = viewRow.item;
-                if (config?.signals) {
+                if (config.signals) {
                     applySignals(row, config, {
                         decision: item.decision || '',
                         metric: numOrNaN(item.primaryMetric),
@@ -2980,7 +3084,18 @@
             openRerunDrafts.add(key);
             // Remember which scenario tab this came from (not 'rerun' itself).
             const activeTab = getActiveTabType();
-            if (activeTab !== 'rerun') updateDetail(draftEntryKey(key), { origin: activeTab });
+            const draftKey = draftEntryKey(key);
+            if (activeTab !== 'rerun') {
+                const patch = { origin: activeTab };
+                // Pre-fill the tab's own best guess at a structure, but only
+                // for a genuinely fresh draft -- one closed and reopened keeps
+                // whatever type was already chosen for it.
+                const recommended = TAB_RECOMMENDED_RERUN_TYPES[activeTab];
+                if (!detailFor(draftKey).type && recommended) {
+                    patch.type = recommended.default;
+                }
+                updateDetail(draftKey, patch);
+            }
             afterRerunStateChange();
             focusNotesFieldFor(tableBody.querySelector(
                 `tr[data-selection-key="${CSS.escape(key)}"]:not([data-instance-id])`));
@@ -3003,11 +3118,33 @@
             flashRerunTab();
         }
 
+        // Confirmed here, in the one place every removal path goes through,
+        // rather than at each call site -- this is now the only way to remove
+        // an entry, so it needs a guard against an accidental click.
         function removeRerunInstance(id) {
             if (!id) return;
+            if (!confirm('Remove this entry from your rerun list?')) return;
             rerunInstances = rerunInstances.filter(inst => inst.id !== id);
             rerunDetails.delete(id);
             afterRerunStateChange();
+        }
+
+        // A new entry for the same experiment, starting as a copy of this one's
+        // type, tags and notes -- a head start for planning a variation rather
+        // than a blank draft.
+        function duplicateRerunInstance(id) {
+            const source = rerunInstances.find(inst => inst.id === id);
+            if (!source) return;
+            const newId = newRerunInstanceId();
+            rerunInstances.push({ id: newId, key: source.key });
+            const record = detailFor(id);
+            if (Object.keys(record).length) {
+                // tags is a Set -- shared by reference otherwise, so toggling
+                // one entry's tag would silently toggle the other's too.
+                rerunDetails.set(newId, { ...record, tags: record.tags ? new Set(record.tags) : undefined });
+            }
+            afterRerunStateChange();
+            flashRerunTab();
         }
 
         // A nudge that the entry landed on the Rerun tab, since adding happens
@@ -3063,6 +3200,10 @@
                     <span class="row-action-hint">No report URL</span>
                 </span>`}
                 ${instanceId ? `
+                <button type="button" class="row-action-item" role="menuitem" data-action="duplicate-rerun">
+                    <img src="images/iconRerun.svg" alt="" class="row-action-icon">
+                    <span class="row-action-label">Duplicate</span>
+                </button>
                 <button type="button" class="row-action-item" role="menuitem" data-action="remove-rerun">
                     <img src="images/iconRerun.svg" alt="" class="row-action-icon">
                     <span class="row-action-label">Remove From Rerun List</span>
@@ -3106,6 +3247,7 @@
             if (action === 'rerun') toggleRerunDraft(row);
             if (action === 'view-rerun') showRowOnRerunTab(row);
             if (action === 'remove-rerun') removeRerunInstance(row.dataset.instanceId);
+            if (action === 'duplicate-rerun') duplicateRerunInstance(row.dataset.instanceId);
         });
 
         document.addEventListener('mousedown', function(e) {
@@ -3124,17 +3266,13 @@
             return tableBody.closest('table').querySelectorAll('thead th').length;
         }
 
-        // The panel's one action: on a draft, Rerun adds it to the list; on an
-        // entry (Rerun tab), Remove takes that one entry off.
+        // The panel's one action, on a draft: Rerun adds it to the list. A
+        // committed entry has no panel button of its own -- a lone "Remove"
+        // beside the notes field read as if it cleared the description rather
+        // than deleting the whole entry; removal now lives only in the row's
+        // overflow menu, behind a confirmation.
         function buildRerunPanelAction(row, state) {
-            if (state.instanceId) {
-                return el('button', {
-                    type: 'button',
-                    class: 'rerun-panel-btn rerun-panel-btn-remove',
-                    textContent: 'Remove',
-                    dataset: { action: 'remove-rerun', instanceId: state.instanceId }
-                });
-            }
+            if (state.instanceId) return null;
             return el('button', {
                 type: 'button',
                 class: 'rerun-panel-btn rerun-panel-btn-add',
@@ -3163,19 +3301,20 @@
                     const field = el('textarea', {
                         class: 'rerun-note-field',
                         rows: 2,
-                        placeholder: 'What would you change? Notes on the hypothesis, variation, or audience for the rerun\u2026',
+                        placeholder: 'What would you change?',
                         // .value, not innerHTML: notes are free text typed by the user.
                         value: detailFor(entryKey).notes || '',
                         dataset: { entryKey }
                     });
 
-                    // Notes, picker and action share a row: the field takes the
-                    // space that is left, the picker and button sit at the right.
+                    // Stacked top to bottom: test type, then notes, then the
+                    // panel's action -- reads like a short form rather than a
+                    // row of side-by-side controls.
                     const noteRow = el('tr', { class: 'rerun-note-row' + (isSubRow ? ' sub-row-note' : '') },
                         el('td', { colSpan: colspan },
                             el('div', { class: 'rerun-note-layout' }, [
-                                field,
                                 buildRerunTypePicker(entryKey),
+                                field,
                                 buildRerunPanelAction(row, state)
                             ])));
 
@@ -3250,6 +3389,10 @@
             setRerunType(select.dataset.entryKey, select.value);
 
             select.classList.toggle('is-set', select.value !== DEFAULT_RERUN_TYPE);
+
+            // The row's own icon carries the chosen type's glyph now.
+            const row = rowForEntryKey(select.dataset.entryKey);
+            if (row) applyRerunButtonState(row, rowRerunState(row));
 
             const picker = select.closest('.rerun-type-picker');
             if (!picker) return;
