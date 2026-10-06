@@ -246,9 +246,10 @@
                  renderTabParamsPanel(); hidden for tabs with no editable rule. -->
             <div id="tabParamsPanel" class="tab-params-panel"></div>
 
-            <!-- Custom tab's placeholder rule row. Shares .tab-params-panel so it
+            <!-- Placeholder rule row for tabs with no editable rule of their own
+                 yet (Segments, Patterns, Custom). Shares .tab-params-panel so it
                  lines up with the editable rule rows on the other tabs. -->
-            <div id="customPanel" class="tab-params-panel">
+            <div id="placeholderPanel" class="tab-params-panel">
                 <span class="tab-param-text custom-panel-placeholder">Placeholder to add custom rules in the future</span>
             </div>
         </div>
@@ -4059,8 +4060,10 @@
                 const tabType = this.dataset.tab;
                 console.log('Switched to tab:', tabType);
 
-                // Toggle the Custom tab's placeholder panel
-                document.getElementById('customPanel').classList.toggle('visible', tabType === 'custom');
+                // Toggle the placeholder panel for tabs with no editable rule
+                // of their own yet.
+                const placeholderTabs = ['segments', 'patterns', 'custom'];
+                document.getElementById('placeholderPanel').classList.toggle('visible', placeholderTabs.includes(tabType));
 
                 // Render the editable parameter panel for this tab
                 renderTabParamsPanel(tabType);
