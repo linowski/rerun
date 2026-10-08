@@ -54,6 +54,10 @@ body {
     padding: 24px;
     border-radius: 0;
     box-shadow: none;
+    /* Positioning context for .compound-group-bar: it needs to sit to the
+       left of .table-container itself (which clips with overflow-x: auto,
+       so it can't host the bar and still let it spill outside). */
+    position: relative;
 }
 
 .header {
@@ -253,9 +257,10 @@ h1 {
        and read as a stray grey block with no tab in it. */
     width: fit-content;
     max-width: 100%;
-    /* No gap: tabs sit edge to edge, so nothing but each tab's own hover/active
-       fill marks a boundary between them. */
-    gap: 0;
+    /* Enough of a gap to read as separate tabs, short of a wide seam between
+       each one's hover/active fill, or of squeezing a longer label like
+       "Almost Significant" onto two lines. */
+    gap: 3px;
 }
 
 /* Placeholder shown only when the Custom tab is active. Layout, spacing and
@@ -325,23 +330,28 @@ h1 {
    like every other tab, rather than carrying a fixed margin/padding/border
    that reserved room for a separator no longer drawn. */
 .tab[data-tab="rerun"] {
-    font-weight: 800;
-    flex-direction: row;
-    /* Top-align so the icon starts level with the other tabs' icons instead of
-       being vertically centred by the shared .tab rule. */
-    align-items: flex-start;
-    gap: 10px;
+    /* Pull the label closer to the icon than the shared 8px gap: a bigger
+       icon (62px vs the scenario tabs' 40px) makes that same gap read wider. */
+    gap: 4px;
+}
+
+.tab[data-tab="rerun"] .tab-label {
+    text-transform: uppercase;
+    color: var(--accent);
+}
+
+/* Active and hover both beat the tab's own blue, same as every other tab:
+   black marks "this is selected" or "about to be", blue is only the quiet
+   default. */
+.tab[data-tab="rerun"].active .tab-label,
+.tab[data-tab="rerun"]:not(.active):hover .tab-label {
+    color: var(--text-strong);
 }
 
 .tab[data-tab="rerun"] .tab-icon {
     width: 62px;
     height: 62px;
     flex-basis: 62px;
-}
-
-/* Nudge the label down so it sits optically centred against the taller icon. */
-.tab[data-tab="rerun"] .tab-label {
-    margin-top: 22px;
 }
 
 /* Anchor for a count badge sitting on an icon. Shared by the Rerun tab's icon
@@ -534,6 +544,11 @@ h1 {
     overflow-y: hidden;
     background-color: var(--surface);
     border: 1px solid var(--panel-border);
+    /* Lives here, not on .pagination-controls, so the bottom of the page
+       reads the same whether or not that control happens to be visible --
+       it's display:none below one page of rows (the Rerun tab, usually),
+       and its own margin would otherwise collapse away along with it. */
+    margin-bottom: 72px;
     /* Bottom corners only: the top of this box is flush against .tab-bridge,
        continuing the same white surface from the active tab above, so only
        the outer bottom of the whole stack curves. */
@@ -558,6 +573,9 @@ table {
     table-layout: fixed;
     border-collapse: collapse;
     background-color: var(--surface);
+    /* Positioning context for .compound-group-bar, which measures its rows in
+       viewport space and needs a stable ancestor to offset against. */
+    position: relative;
 }
 
 thead {
@@ -637,7 +655,11 @@ th.sortable.grouped-desc::after {
 
 tbody tr {
     background-color: var(--surface);
-    transition: transform 0.15s ease;
+    /* background-color included: an abrupt swap between the amber scenario
+       highlight and the blue selected state (e.g. right as a draft opens) can
+       read as a one-frame flicker to the wrong colour; animating it smooths
+       that transition instead of hard-cutting. */
+    transition: transform 0.15s ease, background-color 0.12s ease;
 }
 
 /* Separator between experiment families (not within parent+sub-rows).
@@ -687,8 +709,8 @@ tbody tr:hover {
 }
 
 .rerun-row-btn {
-    width: 30px;
-    height: 30px;
+    width: 32px;
+    height: 32px;
     padding: 0;
     display: flex;
     align-items: center;
@@ -712,12 +734,12 @@ tbody tr:hover {
 
 /* On the Rerun tab, which scenario an entry was planned from -- sits under
    the rerun button, which now always shows the test type instead of standing
-   in for this. Small and quiet: it's provenance, not the row's main signal. */
+   in for this. Full strength: it's provenance worth reading, not a disabled
+   or secondary control. */
 .rerun-row-origin {
-    width: 16px;
-    height: 16px;
+    width: 17px;
+    height: 17px;
     object-fit: contain;
-    opacity: 0.8;
     cursor: default;
 }
 
@@ -732,28 +754,38 @@ tbody tr:hover {
 }
 
 .rerun-row-btn-icon {
-    width: 26px;
-    height: 26px;
+    width: 30px;
+    height: 30px;
     object-fit: contain;
     border-radius: 6px;
 }
 
 /* A chosen test type is the most specific thing the row can show, so its
-   glyph takes the button over: same black tile as the picker's icon, just
-   small enough to sit in the row. */
+   icon takes the button over: same black tile as before, now holding a small
+   hand-drawn SVG (RERUN_TYPE_ICON_SVG) instead of a typed glyph, so every
+   type fits cleanly at a legible size regardless of label length. */
 .rerun-row-btn-type {
     display: none;
     align-items: center;
     justify-content: center;
-    width: 26px;
-    height: 26px;
-    font-size: 10px;
-    font-weight: 700;
-    font-variant-ligatures: none;
-    color: #fff;
+    width: 30px;
+    height: 30px;
+    padding: 2px;
     background-color: #000;
     border-radius: 6px;
     box-sizing: border-box;
+}
+
+.rerun-row-btn-type svg {
+    width: 100%;
+    height: 100%;
+}
+
+/* Thin diagonal strokes (the / in x/2, the arrow in x->x) show colour
+   fringing from subpixel anti-aliasing at the small sizes these render at --
+   geometricPrecision keeps edges crisp and colour-true instead. */
+.rerun-row-btn-type svg text {
+    shape-rendering: geometricPrecision;
 }
 
 .rerun-row-btn.showing-type .rerun-row-btn-type {
@@ -762,6 +794,34 @@ tbody tr:hover {
 
 tr.checkbox-selected {
     background-color: var(--hover-blue);
+}
+
+/* One continuous bracket per "Rerun as Compound" group, positioned by
+   drawCompoundGroupBars() to span every one of the group's rows -- including
+   each entry's own tag/notes rows -- as a real border on a <tr> can't cross
+   row boundaries cleanly. Sits to the left of .table-container entirely
+   (left/top set in JS, relative to .container) rather than inside the table,
+   which clips anything placed past its own left edge via overflow-x. The
+   group itself is only ever its own independent entries underneath; this bar
+   is presentation alone. */
+.compound-group-bar {
+    position: absolute;
+    width: 4px;
+    background-color: var(--text-strong);
+    border-radius: 2px;
+    pointer-events: none;
+}
+
+/* Breathing room above and below a bracketed group: a real spacer row (see
+   .compound-group-spacer below), not padding -- padding on the row itself
+   would still be filled with that row's own blue background, so it wouldn't
+   read as a break between cards. The spacer's own background is the page's,
+   so it shows through as an actual gap. */
+.compound-group-spacer > td {
+    height: 16px;
+    padding: 0;
+    border: 0;
+    background-color: var(--surface-page);
 }
 
 /* The whole row opens its rerun panel on a scenario tab. */
@@ -1086,7 +1146,67 @@ tbody td:has(> .experiment-name-container) {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 4px;
+    gap: 6px;
+}
+
+/* "Select for Rerun as Compound" -- only meaningful, and only shown, once a
+   row is drafting or already listed (the row carries .checkbox-selected
+   then); a collapsed row has nothing open to compound with anything else. No
+   fill while unselected, so it reads as an outline against the row rather
+   than a solid cut-out; blue by default (clickable), black once checked
+   (selected) -- the same split used everywhere else. */
+.rerun-compound-check {
+    display: none;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    align-items: center;
+    justify-content: center;
+    background-color: transparent;
+    /* Blue by default, same as every other clickable affordance, rather than
+       waiting for hover to say so. */
+    border: 2px solid var(--accent);
+    border-radius: 4px;
+    cursor: pointer;
+    box-sizing: border-box;
+    flex: 0 0 auto;
+}
+
+tr.checkbox-selected .rerun-compound-check {
+    display: flex;
+}
+
+.rerun-compound-check:hover {
+    border-color: var(--accent-dark);
+}
+
+.rerun-compound-check-mark {
+    display: none;
+    width: 13px;
+    height: 13px;
+}
+
+/* A faint preview of the mark on hover while still unchecked, so hovering
+   previews what a click will do instead of showing nothing until it lands. */
+.rerun-compound-check:not([aria-checked="true"]):hover .rerun-compound-check-mark {
+    display: block;
+    opacity: 0.35;
+}
+
+/* White fill only once checked, so the black mark has a clean field to sit
+   on -- an unselected box stays outline-only. */
+.rerun-compound-check[aria-checked="true"] {
+    background-color: #fff;
+    border-color: var(--text-strong);
+}
+
+.rerun-compound-check[aria-checked="true"] .rerun-compound-check-mark {
+    display: block;
+}
+
+.rerun-compound-check:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
 }
 
 /* Overflow button: present on every tab under the rerun button. It opens the
@@ -1206,6 +1326,62 @@ tbody td:has(> .experiment-name-container) {
     font-weight: 400;
     color: var(--text-faint);
     font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+}
+
+/* "Reruns: [icon] [icon]" on its own line under the experiment id -- the only
+   sign on a scenario tab that a test already has entries planned, now that
+   the row itself (background, row-controls icon) stays neutral unless it's
+   actually being drafted. A block of its own (not inline with the id), so it
+   doesn't compete with it for space as more tiles are added. Empty and
+   collapsed via :empty when there's nothing to show, so it never reserves
+   space on a row with no reruns. */
+.rerun-reference-strip {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 4px;
+}
+
+.rerun-reference-strip:empty {
+    display: none;
+}
+
+.rerun-reference-label {
+    font-size: 11px;
+    color: var(--text-faint);
+}
+
+/* Blue, not black: each tile is a clickable jump to its own entry on the
+   Rerun tab, an affordance like any other clickable control -- black stays
+   reserved for an actually selected/active state. */
+.rerun-reference-tile {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    background-color: var(--accent);
+    border: none;
+    border-radius: 5px;
+    box-sizing: border-box;
+    padding: 3px;
+    cursor: pointer;
+    transition: background-color 0.1s;
+}
+
+.rerun-reference-tile:hover {
+    background-color: var(--accent-dark);
+}
+
+.rerun-reference-tile:focus-visible {
+    outline: 2px solid var(--accent-dark);
+    outline-offset: 1px;
+}
+
+.rerun-reference-tile svg {
+    width: 100%;
+    height: 100%;
 }
 
 /* Method column: badge + short name, full description in the tooltip. */
@@ -1335,9 +1511,14 @@ tr.highlighted-row {
 
 /* Selection beats the amber scenario highlight: a selected row reads blue
    whether or not it also matches the active tab's criteria. Declared after
-   .highlighted-row because both selectors carry the same specificity. */
+   .highlighted-row because both selectors carry the same specificity.
+   compound-selected (the "Rerun as Compound" checkbox) gets the same flat
+   fill as checkbox-selected (drafting/committed): both are "this row is
+   selected", just for different reasons. */
 tr.checkbox-selected,
-tr.highlighted-row.checkbox-selected {
+tr.compound-selected,
+tr.highlighted-row.checkbox-selected,
+tr.highlighted-row.compound-selected {
     background-color: var(--hover-blue);
 }
 
@@ -2021,6 +2202,27 @@ tbody tr.rerun-note-row:hover > td {
     border-color: var(--accent-dark);
 }
 
+/* Holds Rerun alongside Rerun as Compound, once a second button appears. */
+.rerun-panel-actions {
+    display: flex;
+    gap: 8px;
+}
+
+/* Blue like every other button -- black is for selected/decided *state*
+   (the Adjust toggles, the Test Type dropdown), not a clickable action, and
+   this is an action like Rerun beside it. The darker accent sets it apart
+   from Rerun without breaking that rule. */
+.rerun-panel-btn-compound {
+    color: #fff;
+    background-color: var(--accent-dark);
+    border: 1px solid var(--accent-dark);
+}
+
+.rerun-panel-btn-compound:hover {
+    background-color: #003d7a;
+    border-color: #003d7a;
+}
+
 .rerun-panel-btn:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 1px;
@@ -2403,9 +2605,10 @@ tbody tr.rerun-note-row:hover > td {
 /* Only rendered when the result set exceeds one page; the table itself holds
    a fixed number of rows regardless of how large the dataset is. */
 /* The highlight navigator is position:fixed at the bottom-left, so it floats
-   over whatever the page ends with. Reserve a lane for it: the controls keep
-   clear on the left, and the page keeps tail room so the last row of content
-   can always be scrolled out from under it. */
+   over whatever the page ends with. The tail room that keeps the last row of
+   content clear of it now lives on .table-container (always present, not
+   just when this control happens to render); here, only its own left-hand
+   clearance for the same badge remains. */
 .pagination-controls {
     display: flex;
     align-items: center;
@@ -2413,7 +2616,6 @@ tbody tr.rerun-note-row:hover > td {
     gap: 16px;
     flex-wrap: wrap;
     padding: 12px 4px 0 150px;
-    margin-bottom: 72px;
     font-size: 12px;
     color: var(--text-muted);
 }

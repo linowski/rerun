@@ -709,6 +709,7 @@
                 metric: numOrNaN(item.primaryMetric),
                 pvalue: numOrNaN(item.pvalue),
                 secondary: secondaryDataAttr(item),
+                secondaryPvalue: numOrNaN(item.secondaryPvalue),
                 decision: item.decision || ''
             }, config.params || {}) || false;
         }
@@ -770,6 +771,7 @@
         }
 
         const RERUN_SELECTION_KEY = 'rerun_selected_keys';
+        const ACTIVE_TAB_KEY = 'rerun_active_tab';
 
         // Startup ordering: a restored cache (API or import) renders rows and runs
         // highlighting/sorting synchronously while this script is still executing,
@@ -885,15 +887,23 @@
                 template: p => [
                     'Highlight when', { param: 'decisionFilter' },
                     'and effect >', { param: 'minEffect' },
-                    ' and p-value >', { param: 'pMin' }
+                    ' and (p-value >', { param: 'pMin' }, ' or secondary contradicts)'
                 ],
-                matches: ({ metric, pvalue, decision }, p) =>
+                // A shaky win isn't only a weak primary p-value -- it's also a
+                // significant primary propped up by a secondary that doesn't
+                // back it up: not significant itself, or pointing the other way.
+                matches: ({ metric, pvalue, secondary, secondaryPvalue, decision }, p) =>
                     decisionMatches(decision, p.decisionFilter.value)
-                    && metric > p.minEffect.value && pvalue > p.pMin.value,
+                    && metric > p.minEffect.value
+                    && (pvalue > p.pMin.value || contradictingSecondary(metric, secondary, secondaryPvalue)),
                 signals: {
                     decision: decisionSignal,
                     primary: ({ metric }, p) => metric > p.minEffect.value,
-                    primaryP: ({ pvalue }, p) => pvalue > p.pMin.value
+                    primaryP: ({ pvalue }, p) => pvalue > p.pMin.value,
+                    secondary: ({ metric, secondary, secondaryPvalue }) =>
+                        contradictingSecondary(metric, secondary, secondaryPvalue),
+                    secondaryP: ({ metric, secondary, secondaryPvalue }) =>
+                        contradictingSecondary(metric, secondary, secondaryPvalue)
                 }
             },
             'false-neg': {
@@ -980,6 +990,14 @@
         // and reopening the panel, but not a reload.
         const openRerunDrafts = new Set();
 
+        // Rows checked for "Rerun as Compound", by selection key. Independent of
+        // whether a row's draft panel is open -- checking a row is a separate
+        // decision from drafting it. Each stays its own entry with its own type/
+        // notes/tags; compounding only draws a shared visual connector between
+        // the resulting Rerun-list rows, nothing in the data actually merges.
+        const compoundSelectedKeys = new Set();
+        let compoundGroupCounter = 0;
+
         // Everything an entry carries, as one record per entry key: the scenario
         // tab it was picked from (`origin`), its change notes (`notes`), its Adjust
         // tags (`tags`, a Set of ids) and its rerun type (`type`). An entry key is
@@ -1007,6 +1025,24 @@
 
         function rerunInstanceCount(selectionKey) {
             return rerunInstances.filter(inst => inst.key === selectionKey).length;
+        }
+
+        // The first listed instance for a key -- used to pre-fill a fresh
+        // draft's type from an experiment's existing entry (see
+        // toggleRerunDraft), so a second rerun of the same test starts from
+        // what was already planned instead of a generic default.
+        function firstRerunInstanceFor(selectionKey) {
+            return rerunInstances.find(inst => inst.key === selectionKey);
+        }
+
+        // The most recently added instance for a key -- rerunInstances is
+        // append-ordered, so this is just the last match. Used so a scenario
+        // tab's row can offer "Remove From Rerun List" too: with 2+ entries
+        // for the same experiment it isn't clear which one that single row
+        // speaks for, so it acts on the newest, same as "Rerun Another"
+        // naturally adds to the end.
+        function latestRerunInstanceFor(selectionKey) {
+            return [...rerunInstances].reverse().find(inst => inst.key === selectionKey);
         }
 
         // Whether an entry key still names something live, so a late blur can't
@@ -1186,6 +1222,37 @@
             }
         ];
 
+        // SVG renderings of the same glyphs each type already carries (see
+        // `icon` above) -- the typed string in a fixed-size tile never fit
+        // "x+y+z" at a legible size, so these draw the same characters with
+        // real control over size, weight and centring instead of inventing a
+        // separate picture language. One <text> element per glyph, tuned per
+        // string length so every tile reads clearly regardless of width.
+        function glyphSvg(text, fontSize, fontWeight = 700) {
+            // font-variant-emoji: text stops Windows swapping symbols like
+            // &#8709; and &#8594; for a colour emoji glyph, which ignores
+            // fill="#fff" and renders in whatever colour that font ships with.
+            return `<svg viewBox="0 0 24 24"><text x="12" y="12" text-anchor="middle" dominant-baseline="central" `
+                + `font-size="${fontSize}" font-weight="${fontWeight}" font-family="inherit" font-variant-emoji="text" fill="#fff">${text}</text></svg>`;
+        }
+        const RERUN_TYPE_ICON_SVG = {
+            // Lighter weight: at this size, these solid/blocky shapes read
+            // bolder than the thinner multi-character glyphs below even at
+            // the standard 700, so they get 500 to match that visual weight.
+            'same-as-original': glyphSvg('=', 16, 500),
+            'meta-analyze': glyphSvg('+=', 13, 500),
+            'single-variable': glyphSvg('A/B', 10),
+            exploratory: glyphSvg('ABC', 9),
+            'exploratory-confirmatory': glyphSvg('x&#8594;x', 8.5),
+            'leap-compound': glyphSvg('x+y+z', 7),
+            intensify: glyphSvg('x*2', 10.5),
+            reduce: glyphSvg('x/2', 10.5),
+            remove: glyphSvg('&#8709;', 15, 500),
+            invert: glyphSvg('&#8722;x', 11.5),
+            intensity: glyphSvg('x++', 10),
+            cascade: glyphSvg('x&#8594;x&#8217;', 7.5)
+        };
+
         const RERUN_TYPE_BY_ID = new Map(RERUN_TYPES.map(t => [t.id, t]));
         // A rerun repeats the original unless you say otherwise, so this is the
         // default rather than an empty prompt.
@@ -1325,7 +1392,9 @@
         }
 
         // Persist the rerun list (each instance with its details) across
-        // refreshes. Open drafts are not saved: they are not on the list yet.
+        // refreshes. Open drafts are not saved: persisting them across reloads
+        // made a panel reopen on its own with no action taken, which read as
+        // the app being stuck or broken rather than as a restored draft.
         function saveRerunSelection() {
             writeStored(RERUN_SELECTION_KEY, JSON.stringify({
                 instances: rerunInstances.map(({ id, key }) => {
@@ -1387,6 +1456,21 @@
             custom: 'images/iconCustom_Sel.png'
         };
 
+        // Short tab labels for the origin badge's tooltip -- the tab bar's own
+        // label text, not TAB_CONFIG's full page title ("Your 'Almost'
+        // Significant Tests" reads oddly as "From: ..."; "Almost Significant"
+        // matches what the tab itself says).
+        const TAB_SHORT_LABEL = {
+            'almost-significant': 'Almost Significant',
+            lemon: 'Squeeze The Lemon',
+            'big-losers': 'Promising Losers',
+            'false-pos': 'Too Good To Be True',
+            'false-neg': 'Too Good To Be False',
+            segments: 'Interesting Segments',
+            patterns: 'Find Patterns',
+            custom: 'Custom'
+        };
+
         function experimentSelectionKey(item) {
             return item.id || item.name || '';
         }
@@ -1413,22 +1497,44 @@
         function applyRerunButtonState(row, state) {
             const btn = row.querySelector('.rerun-row-btn');
             if (!btn) return;
-            const active = !!state.instanceId || state.drafting || state.listedCount > 0;
+            // Blue/black here is reserved for an actually open or committed
+            // state -- merely having 1+ entries elsewhere on the list no
+            // longer paints this row; that's what the "Reruns:" icon strip
+            // next to the experiment id is for instead (see
+            // renderRerunReferenceStrip).
+            const active = !!state.instanceId || state.drafting;
             btn.classList.toggle('selected', active);
             const icon = btn.querySelector('.rerun-row-btn-icon');
             const typeEl = btn.querySelector('.rerun-row-btn-type');
             if (!icon || !typeEl) return;
 
             // The row's test type (default included) replaces the plain rerun
-            // arrow and the Rerun tab's origin-scenario icon, but only while the
-            // row is in its blue "open" state (drafting or committed) -- not
-            // merely because other entries for it are listed elsewhere.
+            // arrow and the Rerun tab's origin-scenario icon once the row is
+            // drafting, is itself a committed instance, or (on a scenario tab)
+            // its experiment already has an entry somewhere on the list --
+            // represented by that entry's own type/origin, so a row reads as
+            // "already planned" at a glance even when it isn't the open entry.
+            // While collapsed (not drafting, not the instance itself), that
+            // representative entry is the only thing to show. Once a draft is
+            // open, though, its own type takes over -- toggleRerunDraft already
+            // pre-fills a fresh draft from the existing entry's type, so the
+            // two start in agreement and the icon stays live as the dropdown
+            // is edited, instead of being pinned to the old entry regardless
+            // of what the open panel says.
             const highlighted = !!state.instanceId || state.drafting;
-            const entryKey = state.instanceId || draftEntryKey(row.dataset.selectionKey);
+            const draftKey = draftEntryKey(row.dataset.selectionKey);
+            const entryKey = state.instanceId || draftKey;
             const chosenType = highlighted ? RERUN_TYPE_BY_ID.get(rerunTypeFor(entryKey)) : null;
             const showType = !!chosenType;
             btn.classList.toggle('showing-type', showType);
-            typeEl.textContent = showType ? chosenType.icon : '';
+            // Hand-drawn SVG, not the typed glyph: a fixed-size tile never fit
+            // every label (especially "x+y+z") at a legible size, so each type
+            // gets its own small icon instead. RERUN_TYPE_ICON_SVG is static,
+            // hand-authored markup -- never user input -- so innerHTML is safe
+            // here. The span stays aria-hidden; the button's own tip/aria-label
+            // (applyRerunButtonTip) already names the row's state for assistive
+            // tech.
+            typeEl.innerHTML = showType ? (RERUN_TYPE_ICON_SVG[chosenType.id] || '') : '';
 
             // Which scenario the rerun was planned from (Almost Significant,
             // Squeeze The Lemon, ...), as a small badge under the main button --
@@ -1461,6 +1567,10 @@
             const state = rowRerunState(row);
             applyRerunButtonState(row, state);
             row.classList.toggle('checkbox-selected', !!state.instanceId || state.drafting);
+            // A full re-render (new rows, not just a toggle) needs this applied
+            // fresh too -- syncCompoundCheckboxes only touches rows already in
+            // the DOM when a checkbox changes, not rows that didn't exist yet.
+            row.classList.toggle('compound-selected', compoundSelectedKeys.has(compoundSelectionKeyFor(row)));
             // Anywhere on a scenario tab's row opens its draft (see
             // rowClickTogglesDraft). Rerun-tab rows are entries, already open,
             // or context rows that aren't meant to be acted on.
@@ -1468,6 +1578,33 @@
             applyRerunButtonTip(row, state);
             // Entries on the Rerun tab are already where the link would go.
             applyExperimentNameLink(row, !state.instanceId && state.listedCount > 0);
+            renderRerunReferenceStrip(row, state);
+        }
+
+        // "Reruns: [icon] [icon]" on its own line under the experiment id, one
+        // clickable tile per existing entry for this experiment -- the only
+        // sign on a scenario tab that a test already has reruns planned, now
+        // that blue/black on the row itself is reserved for actually drafting
+        // or being the entry (see applyRerunButtonState). Blue, not black: a
+        // tile jumps straight to its entry on the Rerun tab, so it's an
+        // affordance like any other clickable control, not a selected-state
+        // marker. Rerun-tab rows skip this: each entry is already its own row
+        // there, so the strip would just repeat itself.
+        function renderRerunReferenceStrip(row, state) {
+            const strip = row.querySelector('.rerun-reference-strip');
+            if (!strip) return;
+            if (state.instanceId || getActiveTabType() === 'rerun' || state.listedCount === 0) {
+                strip.innerHTML = '';
+                return;
+            }
+            const instances = rerunInstances.filter(inst => inst.key === row.dataset.selectionKey);
+            const tiles = instances.map(inst => {
+                const type = RERUN_TYPE_BY_ID.get(rerunTypeFor(inst.id));
+                const svg = type ? (RERUN_TYPE_ICON_SVG[type.id] || '') : '';
+                const label = type ? type.label : '';
+                return `<button type="button" class="rerun-reference-tile" data-instance-id="${escapeAttr(inst.id)}" data-tip="${escapeAttr(`View ${label} rerun`)}" aria-label="View ${escapeAttr(label)} rerun">${svg}</button>`;
+            }).join('');
+            strip.innerHTML = `<span class="rerun-reference-label">Reruns:</span>${tiles}`;
         }
 
         // Names read as plain text by default; a row on the rerun list gets a
@@ -1506,10 +1643,12 @@
             btn.setAttribute('aria-label', text);
 
             // The origin badge under it names the scenario it was planned from.
+            // Only ever shown while drafting or for the instance itself (see
+            // applyRerunButtonState), so the entry key here is the same one.
             const originEl = row.querySelector('.rerun-row-origin');
             if (originEl && originEl.style.display !== 'none') {
                 const entryKey = state.instanceId || draftEntryKey(row.dataset.selectionKey);
-                const label = TAB_CONFIG[detailFor(entryKey).origin]?.title || '';
+                const label = TAB_SHORT_LABEL[detailFor(entryKey).origin] || '';
                 if (label) originEl.dataset.tip = `From: ${label}`;
                 originEl.alt = label;
             }
@@ -1607,6 +1746,23 @@
             </button>`;
         }
 
+        // Only shown while the row is drafting or already on the list (CSS keys
+        // off .checkbox-selected on the row) -- checking two or more of these
+        // reveals "Rerun as Compound" in each checked row's own panel. A
+        // separate decision from drafting: checking a row doesn't open or close
+        // its panel, and closing a panel doesn't uncheck it.
+        function renderCompoundCheckbox() {
+            // SVG, not a typed checkmark character: the same small-size colour
+            // fringing that affected the type icons (see RERUN_TYPE_ICON_SVG)
+            // showed up on a typed checkmark too, and a drawn path gives a
+            // crisper, more angular mark than the system glyph does.
+            return `<button type="button" class="rerun-compound-check" role="checkbox" aria-checked="false" data-tip="Select for Rerun as Compound" aria-label="Select for Rerun as Compound">
+                <svg class="rerun-compound-check-mark" viewBox="0 0 16 16" aria-hidden="true">
+                    <path d="M3 8.5 L6.5 12 L13 4.5" fill="none" stroke="#2c2c2c" stroke-width="2.2" stroke-linecap="square" stroke-linejoin="miter"/>
+                </svg>
+            </button>`;
+        }
+
         // Sits under the rerun button on the Rerun tab: which scenario tab the
         // entry was planned from (Almost Significant, Squeeze The Lemon, ...),
         // now that the button above it shows the test type instead.
@@ -1667,7 +1823,7 @@
             if (experiment.url) row.dataset.reportUrl = experiment.url;
 
             row.innerHTML = `
-                <td class="col-select"><div class="row-controls">${renderRerunButton()}${renderOriginBadge()}${renderRerunMenuButton()}</div></td>
+                <td class="col-select"><div class="row-controls">${renderRerunButton()}${renderOriginBadge()}${renderCompoundCheckbox()}${renderRerunMenuButton()}</div></td>
                 <td class="col-name">
                     <div class="experiment-name-container">
                         <div class="experiment-name-row">
@@ -1677,6 +1833,7 @@
                         ${experiment.id ? `<div class="experiment-meta">
                             <span class="experiment-id">${experiment.id}</span>
                         </div>` : ''}
+                        <div class="rerun-reference-strip"></div>
                     </div>
                 </td>
                 <td class="col-started launch-date">${formatLaunchDate(experiment.date)}</td>
@@ -1707,7 +1864,7 @@
             if (instanceId) row.dataset.instanceId = instanceId;
 
             row.innerHTML = `
-                <td class="col-select"><div class="row-controls">${renderRerunButton()}${renderOriginBadge()}${renderRerunMenuButton()}</div></td>
+                <td class="col-select"><div class="row-controls">${renderRerunButton()}${renderOriginBadge()}${renderCompoundCheckbox()}${renderRerunMenuButton()}</div></td>
                 <td class="col-name">
                     <div class="experiment-name-container">
                         <div class="experiment-name-row">
@@ -1819,7 +1976,55 @@
 
             const sorter = currentRowSorter();
             if (sorter) families.sort((a, b) => sorter(a.parent, b.parent));
-            return families.flatMap(family => family.rows);
+
+            return clusterCompoundGroups(families.flatMap(family => family.rows));
+        }
+
+        // A compound group's members can be scattered two different ways: across
+        // families (different original experiments, grouped together) and
+        // *within* one family (two instances of the same experiment, only one of
+        // them grouped, sitting between the group's other members in whatever
+        // order they were created). Rather than reorder families and hope
+        // instance order happens to cooperate, this runs once on the final flat
+        // row list and pulls every row sharing a compoundGroup together, right
+        // after that group's first-seen row -- so the bracket drawCompoundGroupBars
+        // paints is always genuinely contiguous, regardless of where the rows
+        // started out. A sub-row always travels with its own parent, never split
+        // from it, since the two are never meaningfully separable in the table.
+        function clusterCompoundGroups(rows) {
+            const groupOf = row => row.instanceId && detailFor(row.instanceId).compoundGroup;
+            if (!rows.some(groupOf)) return rows;
+
+            // Each parent carries its own sub-rows as one movable unit.
+            const units = [];
+            const unitByParentKey = new Map();
+            rows.forEach(row => {
+                if (row.kind === 'sub') {
+                    unitByParentKey.get(row.parent.selectionKey)?.rows.push(row);
+                    return;
+                }
+                const unit = { rows: [row] };
+                unitByParentKey.set(row.selectionKey, unit);
+                units.push(unit);
+            });
+
+            const unitGroup = unit => unit.rows.map(groupOf).find(Boolean);
+            const firstIndexForGroup = new Map();
+            const ordered = [];
+            units.forEach(unit => {
+                const group = unitGroup(unit);
+                if (!group) { ordered.push(unit); return; }
+                if (!firstIndexForGroup.has(group)) {
+                    firstIndexForGroup.set(group, ordered.length);
+                    ordered.push(unit);
+                    return;
+                }
+                const afterIndex = firstIndexForGroup.get(group);
+                ordered.splice(afterIndex + 1, 0, unit);
+                firstIndexForGroup.set(group, afterIndex + 1);
+            });
+
+            return ordered.flatMap(unit => unit.rows);
         }
 
         // Column -> sort type, read from the header so it stays in step with the
@@ -1867,11 +2072,121 @@
             tableBody.appendChild(fragment);
 
             applyRowHighlighting(pageRows, tabType);
+            applyCompoundGrouping(pageRows, tabType);
             attachCheckboxListeners();
             syncRerunNoteRows(tabType);
+            // After the tag/notes rows are in, so the group's full height --
+            // including each entry's open panel -- is there to measure.
+            drawCompoundGroupBars();
             renderPaginationControls();
             updateRerunTabCount();
             updateTabCountBadges();
+        }
+
+        // Entries added together via "Rerun as Compound" share a compoundGroup
+        // id (set in addCompoundRerunFromChecked); on the Rerun tab they get a
+        // connecting left border so the group reads as one bracketed unit, even
+        // though each stays its own independent entry underneath.
+        function applyCompoundGrouping(pageRows, tabType) {
+            if (tabType !== 'rerun') return;
+            const rendered = tableBody.children;
+            let prevGroup = null;
+            pageRows.forEach((viewRow, index) => {
+                const row = rendered[index];
+                if (!row) return;
+                const group = viewRow.instanceId ? detailFor(viewRow.instanceId).compoundGroup : null;
+                if (group) {
+                    row.classList.add('compound-grouped');
+                    row.classList.toggle('compound-group-start', group !== prevGroup);
+                    row.dataset.compoundGroup = group;
+                } else {
+                    delete row.dataset.compoundGroup;
+                }
+                prevGroup = group || null;
+            });
+        }
+
+        // A real border can't span multiple <tr>s -- including the tag/notes
+        // rows syncRerunNoteRows injects between entries -- without gaps at
+        // every row boundary, so the bracket is drawn as one absolutely
+        // positioned bar per group instead, sized to the group's full rendered
+        // height. Anchored to .container, not the table: .table-container
+        // clips with overflow-x: auto, so a bar meant to sit to its left has
+        // to live outside that clipped box entirely.
+        function drawCompoundGroupBars() {
+            const anchor = document.querySelector('.container');
+            document.querySelectorAll('.compound-group-bar').forEach(el => el.remove());
+            document.querySelectorAll('.compound-group-spacer').forEach(el => el.remove());
+            const tableContainer = document.querySelector('.table-container');
+            if (!anchor || !tableContainer) return;
+
+            const starts = Array.from(tableBody.querySelectorAll('tr.compound-group-start'));
+            const lastRows = starts.map(startRow => {
+                const groupId = startRow.dataset.compoundGroup;
+                // Walk forward through this row's own injected tag/notes rows and
+                // every subsequent row (and its own injected rows) that shares the
+                // same group id, so the bar spans each entry's full open panel too.
+                let lastRow = startRow;
+                let node = startRow.nextElementSibling;
+                while (node) {
+                    const isOwnAuxRow = node.classList.contains('rerun-tag-row') || node.classList.contains('rerun-note-row');
+                    const sameGroup = node.dataset.compoundGroup === groupId;
+                    if (!isOwnAuxRow && !sameGroup) break;
+                    if (isOwnAuxRow || sameGroup) lastRow = node;
+                    node = node.nextElementSibling;
+                }
+                return lastRow;
+            });
+
+            const colspan = tableColumnCount();
+            const spacerRow = () => el('tr', { class: 'compound-group-spacer' }, el('td', { colSpan: colspan }));
+            // A real row with the page's own background on each side, not
+            // padding on the group's own row -- padding would still be filled
+            // with that row's blue, so it wouldn't read as a break between
+            // cards. Inserted before measuring, so the bar's height already
+            // excludes the spacers' own space. Skipped at the very top/bottom
+            // of the table -- the table edge (and the page's own padding past
+            // it) already reads as a break on its own, so a spacer there would
+            // just stack a second, redundant gap on top of it.
+            starts.forEach((startRow, i) => {
+                if (startRow.previousElementSibling) startRow.before(spacerRow());
+                if (lastRows[i].nextElementSibling) lastRows[i].after(spacerRow());
+            });
+
+            const anchorRect = anchor.getBoundingClientRect();
+            const tableLeft = tableContainer.getBoundingClientRect().left - anchorRect.left;
+            starts.forEach((startRow, i) => {
+                const lastRow = lastRows[i];
+                const top = startRow.getBoundingClientRect().top - anchorRect.top;
+                const bottom = lastRow.getBoundingClientRect().bottom - anchorRect.top;
+                const bar = document.createElement('div');
+                bar.className = 'compound-group-bar';
+                // Just left of the table's own border, not inside it.
+                bar.style.left = (tableLeft - 10) + 'px';
+                bar.style.top = top + 'px';
+                bar.style.height = (bottom - top) + 'px';
+                anchor.appendChild(bar);
+            });
+        }
+
+        // Group bars are measured off live row heights, but rows reflow after
+        // their own render pass -- a test-type change swaps the variant
+        // diagram, an Adjust pill wraps its label, a notes field grows with
+        // typed text. None of those call drawCompoundGroupBars() themselves,
+        // so the bar would drift from the rows it's supposed to bracket.
+        // Watching the table body's own box size catches every such reflow
+        // in one place instead of hooking each interaction individually.
+        let compoundBarResizeRaf = null;
+        function initCompoundGroupBarResync() {
+            if (typeof ResizeObserver === 'undefined') return;
+            const observer = new ResizeObserver(() => {
+                if (compoundBarResizeRaf) return;
+                compoundBarResizeRaf = requestAnimationFrame(() => {
+                    compoundBarResizeRaf = null;
+                    if (document.querySelector('tr.compound-group-start')) drawCompoundGroupBars();
+                });
+            });
+            observer.observe(tableBody);
         }
 
         // Highlighting is applied to the rendered page only -- it is presentation.
@@ -2388,22 +2703,37 @@
         // Switch to the Rerun tab and bring the row's first entry into view,
         // turning to its page if the list is paginated. The tab switch
         // re-renders, so the entry is looked up afresh rather than reusing `row`.
-        function showRowOnRerunTab(row) {
+        // Jumps to a specific entry on the Rerun tab. Defaults to the first
+        // entry for a given experiment (the original behaviour, used by the
+        // tagged-name link); the "Reruns:" strip's own tiles pass their exact
+        // instanceId instead, so each one jumps to itself rather than
+        // whichever entry happens to be first for that experiment. `preselect`
+        // also checks the target's compound-select checkbox on arrival -- only
+        // the reference-strip tiles ask for this, since jumping there from "I
+        // want to compound this with something else" is the whole point of
+        // that click; the plain tagged-name link leaves selection alone.
+        function showRowOnRerunTab(row, instanceId = null, { preselect = false } = {}) {
             const key = row.dataset.selectionKey;
             document.querySelector('.tab[data-tab="rerun"]')?.click();
-            const index = view.filtered.findIndex(viewRow => viewRow.instanceId && viewRow.selectionKey === key);
+            const index = view.filtered.findIndex(viewRow => instanceId
+                ? viewRow.instanceId === instanceId
+                : viewRow.instanceId && viewRow.selectionKey === key);
             if (index < 0) return;
             const page = Math.floor(index / view.pageSize);
             if (page !== view.page) {
                 view.page = page;
                 renderView('rerun');
             }
-            const target = Array.from(tableBody.querySelectorAll('tr[data-instance-id]'))
-                .find(tr => tr.dataset.selectionKey === key);
+            const target = instanceId
+                ? tableBody.querySelector(`tr[data-instance-id="${CSS.escape(instanceId)}"]`)
+                : Array.from(tableBody.querySelectorAll('tr[data-instance-id]')).find(tr => tr.dataset.selectionKey === key);
             if (!target) return;
             target.scrollIntoView({ behavior: 'smooth', block: 'center' });
             target.classList.add('row-flash');
             setTimeout(() => target.classList.remove('row-flash'), 1200);
+            if (preselect && target.dataset.instanceId && !compoundSelectedKeys.has(target.dataset.instanceId)) {
+                toggleCompoundSelection(target);
+            }
         }
 
         // Escape gives up an in-progress note without leaving the field focused;
@@ -3088,12 +3418,22 @@
             const draftKey = draftEntryKey(key);
             if (activeTab !== 'rerun') {
                 const patch = { origin: activeTab };
-                // Pre-fill the tab's own best guess at a structure, but only
-                // for a genuinely fresh draft -- one closed and reopened keeps
-                // whatever type was already chosen for it.
-                const recommended = TAB_RECOMMENDED_RERUN_TYPES[activeTab];
-                if (!detailFor(draftKey).type && recommended) {
-                    patch.type = recommended.default;
+                // Pre-fill a genuinely fresh draft's type, but only once:
+                // closed-and-reopened keeps whatever was already chosen for it.
+                // An experiment with an existing entry pre-fills from THAT
+                // entry's type instead of the tab's generic default, so the
+                // new draft's dropdown, its icon, and the row's own collapsed
+                // icon all agree from the moment it opens -- no mismatch to
+                // reconcile, and editing the dropdown from here reads as
+                // changing a copy, not resetting to some unrelated default.
+                const existingInstance = firstRerunInstanceFor(key);
+                if (!detailFor(draftKey).type) {
+                    if (existingInstance) {
+                        patch.type = rerunTypeFor(existingInstance.id);
+                    } else {
+                        const recommended = TAB_RECOMMENDED_RERUN_TYPES[activeTab];
+                        if (recommended) patch.type = recommended.default;
+                    }
                 }
                 updateDetail(draftKey, patch);
             }
@@ -3119,14 +3459,69 @@
             flashRerunTab();
         }
 
+        // "Rerun as Compound": every currently checked row's draft is added to
+        // the list in one go (same outcome as clicking each one's own Rerun
+        // button), tagged with a shared compoundGroup id so the Rerun tab can
+        // draw a connecting border across them. Each stays its own independent
+        // entry -- nothing about the type/notes/tags actually merges.
+        function addCompoundRerunFromChecked() {
+            // compoundSelectedKeys holds entry keys now (draft:<selectionKey>
+            // or an instance id), not raw selectionKeys -- only the drafts
+            // among them can still be turned into a new rerun entry.
+            const keys = Array.from(compoundSelectedKeys)
+                .filter(entryKey => entryKey.startsWith('draft:'))
+                .map(entryKey => entryKey.slice('draft:'.length))
+                .filter(key => openRerunDrafts.has(key));
+            if (keys.length < 2) return;
+            commitOpenNotesField();
+            const groupId = 'cg' + (compoundGroupCounter++);
+            keys.forEach(key => {
+                const draftKey = draftEntryKey(key);
+                const id = newRerunInstanceId();
+                rerunInstances.push({ id, key });
+                const record = detailFor(draftKey);
+                updateDetail(id, { ...record, compoundGroup: groupId });
+                rerunDetails.delete(draftKey);
+                openRerunDrafts.delete(key);
+                compoundSelectedKeys.delete(draftKey);
+            });
+            afterRerunStateChange();
+            flashRerunTab();
+        }
+
+        // Ungroups every entry sharing this one's compoundGroup -- not just
+        // the row the menu was opened on -- since "breaking apart" a group
+        // means the whole bracket goes away, not just one member leaving it.
+        // Each entry's own type/notes/tags are untouched; only the shared
+        // group id is dropped.
+        function breakApartCompoundGroup(instanceId) {
+            const groupId = detailFor(instanceId).compoundGroup;
+            if (!groupId) return;
+            rerunInstances
+                .filter(inst => detailFor(inst.id).compoundGroup === groupId)
+                .forEach(inst => updateDetail(inst.id, { compoundGroup: undefined }));
+            afterRerunStateChange();
+        }
+
         // Confirmed here, in the one place every removal path goes through,
         // rather than at each call site -- this is now the only way to remove
         // an entry, so it needs a guard against an accidental click.
         function removeRerunInstance(id) {
             if (!id) return;
             if (!confirm('Remove this entry from your rerun list?')) return;
+            const groupId = detailFor(id).compoundGroup;
             rerunInstances = rerunInstances.filter(inst => inst.id !== id);
             rerunDetails.delete(id);
+            // A compound bracket means nothing around a single entry -- if
+            // removing this one drops the group to 0 or 1 remaining members,
+            // the survivor (if any) goes back to being a plain entry instead
+            // of carrying a stale compoundGroup with nothing left to connect.
+            if (groupId) {
+                const stillGrouped = rerunInstances.filter(inst => detailFor(inst.id).compoundGroup === groupId);
+                if (stillGrouped.length < 2) {
+                    stillGrouped.forEach(inst => updateDetail(inst.id, { compoundGroup: undefined }));
+                }
+            }
             afterRerunStateChange();
         }
 
@@ -3170,6 +3565,56 @@
                     toggleRowActionMenu(this);
                 });
             });
+            document.querySelectorAll('.rerun-compound-check').forEach(btn => {
+                btn.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    toggleCompoundSelection(this.closest('tr'));
+                });
+            });
+        }
+
+        // The individual rerun entry a row represents -- an instance id if
+        // it's committed, otherwise its draft key -- not the shared
+        // selectionKey of the underlying experiment. Two separate reruns of
+        // the same experiment (two instances, or a duplicate) must be
+        // checkable independently, which keying by selectionKey alone would
+        // not allow: every row sharing that experiment would check together.
+        function compoundSelectionKeyFor(row) {
+            const state = rowRerunState(row);
+            return state.instanceId || draftEntryKey(row.dataset.selectionKey);
+        }
+
+        // Checking a row is independent of drafting it: it neither opens nor
+        // closes the panel, and the panel's own open/close leaves the check
+        // alone too. Only the button's own state (and the derived "Rerun as
+        // Compound" controls) need to refresh.
+        function toggleCompoundSelection(row) {
+            const key = row && compoundSelectionKeyFor(row);
+            if (!key) return;
+            if (compoundSelectedKeys.has(key)) compoundSelectedKeys.delete(key);
+            else compoundSelectedKeys.add(key);
+            syncCompoundCheckboxes();
+        }
+
+        function syncCompoundCheckboxes() {
+            document.querySelectorAll('#tableBody tr[data-selection-key]').forEach(row => {
+                const btn = row.querySelector('.rerun-compound-check');
+                if (!btn) return;
+                const checked = compoundSelectedKeys.has(compoundSelectionKeyFor(row));
+                btn.setAttribute('aria-checked', checked ? 'true' : 'false');
+                // Mirrors onto the row itself, not just the button -- the
+                // selected-row gradient (tr.checkbox-selected, tr.compound-
+                // selected) keys off this class so a checked row reads the
+                // same way a drafting/committed one does.
+                row.classList.toggle('compound-selected', checked);
+            });
+            // Whether "Rerun as Compound" shows next to a draft's own Rerun
+            // button depends on how many rows are checked, so every open
+            // panel's action needs rebuilding -- same rebuild the notes/tags
+            // already go through on any other state change. Flush first, so a
+            // half-typed note elsewhere isn't lost in the rebuild.
+            commitOpenNotesField();
+            syncRerunNoteRows();
         }
 
         // --- Row overflow menu -------------------------------------------------
@@ -3188,6 +3633,7 @@
         function buildRowActionMenu(row) {
             const { instanceId, listedCount, drafting } = rowRerunState(row);
             const reportUrl = row.dataset.reportUrl || '';
+            const inCompoundGroup = instanceId && !!detailFor(instanceId).compoundGroup;
             const menu = document.createElement('div');
             menu.className = 'row-action-menu';
             menu.setAttribute('role', 'menu');
@@ -3205,6 +3651,11 @@
                     <img src="images/iconRerun.svg" alt="" class="row-action-icon">
                     <span class="row-action-label">Duplicate</span>
                 </button>
+                ${inCompoundGroup ? `
+                <button type="button" class="row-action-item" role="menuitem" data-action="break-apart-compound">
+                    <img src="images/iconRerun.svg" alt="" class="row-action-icon">
+                    <span class="row-action-label">Break Apart Group</span>
+                </button>` : ''}
                 <button type="button" class="row-action-item" role="menuitem" data-action="remove-rerun">
                     <img src="images/iconRerun.svg" alt="" class="row-action-icon">
                     <span class="row-action-label">Remove From Rerun List</span>
@@ -3217,7 +3668,12 @@
                 <button type="button" class="row-action-item" role="menuitem" data-action="view-rerun">
                     <img src="images/iconRerun_Sel.svg" alt="" class="row-action-icon">
                     <span class="row-action-label">View In Rerun List</span>
-                </button>` : ''}`;
+                </button>
+                ${listedCount === 1 ? `
+                <button type="button" class="row-action-item" role="menuitem" data-action="remove-rerun" data-latest-for-key="${escapeAttr(row.dataset.selectionKey || '')}">
+                    <img src="images/iconRerun.svg" alt="" class="row-action-icon">
+                    <span class="row-action-label">Remove From Rerun List</span>
+                </button>` : ''}` : ''}`;
             return menu;
         }
 
@@ -3247,8 +3703,19 @@
             if (!row || !action) return;
             if (action === 'rerun') toggleRerunDraft(row);
             if (action === 'view-rerun') showRowOnRerunTab(row);
-            if (action === 'remove-rerun') removeRerunInstance(row.dataset.instanceId);
+            if (action === 'remove-rerun') {
+                // On a scenario tab this row isn't the entry itself (no
+                // instanceId of its own); the menu item names which one it
+                // means via data-latest-for-key, resolved fresh here rather
+                // than baked into the button, so it can't go stale between
+                // opening the menu and clicking the item.
+                const latestForKey = item.dataset.latestForKey;
+                const targetId = row.dataset.instanceId
+                    || (latestForKey ? latestRerunInstanceFor(latestForKey)?.id : '');
+                removeRerunInstance(targetId);
+            }
             if (action === 'duplicate-rerun') duplicateRerunInstance(row.dataset.instanceId);
+            if (action === 'break-apart-compound') breakApartCompoundGroup(row.dataset.instanceId);
         });
 
         document.addEventListener('mousedown', function(e) {
@@ -3267,19 +3734,79 @@
             return tableBody.closest('table').querySelectorAll('thead th').length;
         }
 
-        // The panel's one action, on a draft: Rerun adds it to the list. A
-        // committed entry has no panel button of its own -- a lone "Remove"
-        // beside the notes field read as if it cleared the description rather
-        // than deleting the whole entry; removal now lives only in the row's
-        // overflow menu, behind a confirmation.
-        function buildRerunPanelAction(row, state) {
-            if (state.instanceId) return null;
+        // Checked, already-committed entries: bracket them together without
+        // re-adding anything. Only shown on one of the checked entries (same
+        // rule as the draft version) once there are two or more.
+        function buildGroupAsCompoundAction(instanceId) {
+            if (compoundSelectedKeys.size < 2 || !compoundSelectedKeys.has(instanceId)) return null;
             return el('button', {
                 type: 'button',
-                class: 'rerun-panel-btn rerun-panel-btn-add',
-                textContent: 'Rerun',
-                dataset: { action: 'add-rerun', selectionKey: row.dataset.selectionKey, tip: 'Add to the rerun list' }
+                class: 'rerun-panel-btn rerun-panel-btn-compound',
+                textContent: 'Group as Compound',
+                dataset: {
+                    action: 'group-as-compound',
+                    instanceId,
+                    tip: `Bracket all ${compoundSelectedKeys.size} checked entries together`
+                }
             });
+        }
+
+        // Applies a shared compoundGroup to every checked, already-committed
+        // entry -- nothing is re-added or re-ordered, only the bracket shown
+        // on the Rerun tab. Drafts among the checked set are left alone; only
+        // "Rerun as Compound" can bring those onto the list.
+        function groupAsCompound() {
+            const ids = Array.from(compoundSelectedKeys).filter(key => rerunEntryExists(key) && !key.startsWith('draft:'));
+            if (ids.length < 2) return;
+            const groupId = 'cg' + (compoundGroupCounter++);
+            ids.forEach(id => {
+                updateDetail(id, { compoundGroup: groupId });
+                compoundSelectedKeys.delete(id);
+            });
+            afterRerunStateChange();
+        }
+
+        // The panel's one action, on a draft: Rerun adds it to the list. A
+        // committed entry has no standalone action of its own -- a lone
+        // "Remove" beside the notes field read as if it cleared the
+        // description rather than deleting the whole entry, so removal now
+        // lives only in the row's overflow menu, behind a confirmation -- but
+        // once 2+ committed entries are checked, "Group as Compound" appears
+        // here too, to bracket entries that are already on the list without
+        // re-adding them.
+        function buildRerunPanelAction(row, state) {
+            if (state.instanceId) return buildGroupAsCompoundAction(state.instanceId);
+            const key = row.dataset.selectionKey;
+            // This experiment already has at least one entry on the list --
+            // the row's own icon/highlight already show that one's saved
+            // state, so the button says so too, rather than reading like a
+            // plain first "Rerun" when it will actually add a second entry.
+            const rerunBtn = el('button', {
+                type: 'button',
+                class: 'rerun-panel-btn rerun-panel-btn-add',
+                textContent: state.listedCount > 0 ? 'Rerun Another' : 'Rerun',
+                dataset: {
+                    action: 'add-rerun',
+                    selectionKey: key,
+                    tip: state.listedCount > 0
+                        ? `Add another entry (${state.listedCount} already on the list)`
+                        : 'Add to the rerun list'
+                }
+            });
+            // Only once this row is one of two or more checked -- a single
+            // checked row has nothing to compound with.
+            if (compoundSelectedKeys.size < 2 || !compoundSelectedKeys.has(draftEntryKey(key))) return rerunBtn;
+            const compoundBtn = el('button', {
+                type: 'button',
+                class: 'rerun-panel-btn rerun-panel-btn-compound',
+                textContent: 'Rerun as Compound',
+                dataset: {
+                    action: 'add-rerun-compound',
+                    selectionKey: key,
+                    tip: `Add all ${compoundSelectedKeys.size} checked experiments to the rerun list together`
+                }
+            });
+            return el('div', { class: 'rerun-panel-actions' }, [rerunBtn, compoundBtn]);
         }
 
         // Each open draft, and each entry on the Rerun tab, carries its tag row
@@ -3347,6 +3874,18 @@
             if (row) showRowOnRerunTab(row);
         });
 
+        // Each "Reruns:" tile jumps straight to its own entry on the Rerun
+        // tab, not just the first one for the experiment, and pre-checks it
+        // there -- a click from here is someone about to compound it with
+        // something else, not just browsing.
+        tableBody.addEventListener('click', function(e) {
+            const tile = e.target.closest('.rerun-reference-tile');
+            if (!tile) return;
+            e.stopPropagation();
+            const row = tile.closest('tr');
+            if (row) showRowOnRerunTab(row, tile.dataset.instanceId, { preselect: true });
+        });
+
         // A note grows with what you type instead of scrolling inside a fixed box.
         // Height is reset to auto first so the field can shrink again on deletion;
         // scrollHeight then reports the height the content actually needs.
@@ -3376,6 +3915,8 @@
             if (!btn) return;
             e.stopPropagation();
             if (btn.dataset.action === 'add-rerun') addRerunFromDraft(btn.dataset.selectionKey);
+            if (btn.dataset.action === 'add-rerun-compound') addCompoundRerunFromChecked();
+            if (btn.dataset.action === 'group-as-compound') groupAsCompound();
             if (btn.dataset.action === 'remove-rerun') removeRerunInstance(btn.dataset.instanceId);
         });
 
@@ -3555,6 +4096,18 @@
             const secondaryDown = str.startsWith('-') || str.startsWith('−');
             if (!secondaryUp && !secondaryDown) return false;
             return (primary > 0) === secondaryUp;
+        }
+
+        // A secondary metric "contradicts" the primary win when it doesn't
+        // back it up: no secondary at all, a secondary that wasn't itself
+        // significant, or one pointing the opposite direction from the
+        // primary effect.
+        function contradictingSecondary(metric, secondary, secondaryPvalue) {
+            const str = (secondary || '').trim();
+            if (str === '') return false;
+            const notSignificant = secondaryPvalue == null || Number.isNaN(secondaryPvalue) || secondaryPvalue >= 0.05;
+            const opposite = !sameDirection(metric, secondary);
+            return notSignificant || opposite;
         }
 
         // Light the individual signal cells inside a matching row for tabs that
@@ -3754,13 +4307,44 @@
 
         document.getElementById('highlightPrev').addEventListener('click', () => jumpToHighlight(-1));
         document.getElementById('highlightNext').addEventListener('click', () => jumpToHighlight(1));
-        // A click on the row itself, not on one of its controls, toggles its
-        // rerun draft -- the same as the rerun button. Opening a draft commits
-        // nothing, so a stray click costs nothing. A click that ends a text
-        // selection (copying an ID, say) is left alone.
+        // A click anywhere in an expanded panel (the tag row, the notes row --
+        // both separate <tr>s injected right after the data row, not inside
+        // it) belongs to the data row just above that run of panel rows, the
+        // same row focusNotesFieldFor walks forward from. Returns the click's
+        // own row unchanged if it isn't on a panel row at all.
+        function ownerRowFor(row) {
+            if (!row) return row;
+            if (!row.classList.contains('rerun-tag-row') && !row.classList.contains('rerun-note-row')) return row;
+            let el = row.previousElementSibling;
+            while (el && (el.classList.contains('rerun-tag-row') || el.classList.contains('rerun-note-row'))) {
+                el = el.previousElementSibling;
+            }
+            return el;
+        }
+
+        // A click on the row itself, or anywhere in its expanded panel below
+        // it, toggles its rerun draft -- the same as the rerun button. Opening
+        // a draft commits nothing, so a stray click costs nothing. A click
+        // that ends a text selection (copying an ID, say) is left alone.
         function rowClickTogglesDraft(e) {
-            const row = e.target.closest('tr.row-draftable');
-            if (!row) return null;
+            const row = ownerRowFor(e.target.closest('tr'));
+            if (!row || !row.classList.contains('row-draftable')) return null;
+            if (e.target.closest('a, button, input, select, textarea, label, [role="link"], .row-action-menu')) return null;
+            if (String(window.getSelection?.() || '')) return null;
+            return row;
+        }
+
+        // On the Rerun tab, the row body is otherwise unclaimed (unlike a
+        // scenario tab, where it opens the draft panel instead -- the two
+        // never overlap, since a row is only ever draftable on one or the
+        // other). A click there (or anywhere in its expanded panel below it)
+        // toggles the row's own compound-select checkbox, the same as
+        // clicking the small checkbox directly, so selecting rows to compound
+        // doesn't require hitting that one small target.
+        function rowClickTogglesCompound(e) {
+            if (getActiveTabType() !== 'rerun') return null;
+            const row = ownerRowFor(e.target.closest('tr'));
+            if (!row || !row.dataset.instanceId) return null;
             if (e.target.closest('a, button, input, select, textarea, label, [role="link"], .row-action-menu')) return null;
             if (String(window.getSelection?.() || '')) return null;
             return row;
@@ -3770,15 +4354,15 @@
             const row = e.target.closest('tr');
             if (!row) return;
             const draftRow = rowClickTogglesDraft(e);
-            // Clicks on a row's own controls (or the row itself, which opens
-            // its panel) are actions, not navigation: they already give their
-            // own feedback (the panel opening, the row turning blue), so they
-            // must not also pulse the row amber.
-            const isControl = draftRow || e.target.closest(
-                '.rerun-row-btn, .rerun-menu-btn, .row-action-menu, .rerun-note-field, '
-                + '.rerun-tag, .rerun-type-picker, .rerun-panel-btn');
-            setHighlightReferenceFromRow(row, { pulse: !isControl });
+            const compoundRow = draftRow ? null : rowClickTogglesCompound(e);
+            // A row click only ever moves the highlight navigator's reference
+            // silently -- the amber pulse is reserved for jumpToHighlight's
+            // prev/next arrows, where it's the only feedback for where you
+            // landed. A clicked row already has its own feedback (panel
+            // opening, turning blue), so pulsing it too just reads as a flicker.
+            setHighlightReferenceFromRow(row, { pulse: false });
             if (draftRow) toggleRerunDraft(draftRow);
+            if (compoundRow) toggleCompoundSelection(compoundRow);
         });
 
         // Arrow keys navigate highlights when the navigator is visible
@@ -4059,6 +4643,7 @@
                 // Get the tab type
                 const tabType = this.dataset.tab;
                 console.log('Switched to tab:', tabType);
+                writeStored(ACTIVE_TAB_KEY, tabType);
 
                 // Toggle the placeholder panel for tabs with no editable rule
                 // of their own yet.
@@ -4093,6 +4678,16 @@
         renderTabParamsPanel('almost-significant');
         updateHighlighting('almost-significant');
         updateSummaryBar();
+
+        // Restore whichever tab was last active, if it differs from the
+        // "Almost Significant" default just initialized above -- reuses the
+        // tab's own click handler (icons, highlighting, params panel, counts)
+        // rather than duplicating that setup here.
+        const savedTab = readStored(ACTIVE_TAB_KEY);
+        if (savedTab && savedTab !== 'almost-significant') {
+            const savedTabBtn = document.querySelector(`.tab[data-tab="${CSS.escape(savedTab)}"]`);
+            savedTabBtn?.click();
+        }
 
         // One shared tooltip for every element with a data-tip attribute (use it
         // instead of title). It lives on <body> and is positioned on hover, so it
@@ -4135,6 +4730,7 @@
             window.addEventListener('scroll', hide, true);
         }
         initTooltips();
+        initCompoundGroupBarResync();
 
         // MDE / Base rate inputs: recalculate on change
         function onStatsInputChange() {
