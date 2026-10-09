@@ -24,7 +24,8 @@
     ],
     "traffic": 4,
     "trafficSubtitle": "on product pages",
-    "owner": "Elena"
+    "owner": "Elena",
+    "preregisteredSampleSize": 2900000
   },
   {
     "name": "Checkout Flow Simplification",
@@ -102,7 +103,8 @@
     ],
     "traffic": 23,
     "trafficSubtitle": null,
-    "owner": ""
+    "owner": "",
+    "preregisteredSampleSize": 22000
   },
   {
     "name": "Mobile Navigation Update",
@@ -159,7 +161,8 @@
     ],
     "traffic": 23,
     "trafficSubtitle": null,
-    "owner": ""
+    "owner": "",
+    "preregisteredSampleSize": 3100000
   },
   {
     "name": "Carousel Images",
@@ -211,7 +214,8 @@
     ],
     "traffic": 15,
     "trafficSubtitle": "on campaign pages",
-    "owner": "Sarah"
+    "owner": "Sarah",
+    "preregisteredSampleSize": 280000
   },
   {
     "name": "Search Bar Placement",
@@ -238,7 +242,8 @@
     ],
     "traffic": 8,
     "trafficSubtitle": null,
-    "owner": "Mike"
+    "owner": "Mike",
+    "preregisteredSampleSize": 55000
   },
   {
     "name": "Footer Link Redesign",
@@ -262,7 +267,8 @@
     ],
     "traffic": 5,
     "trafficSubtitle": null,
-    "owner": ""
+    "owner": "",
+    "preregisteredSampleSize": 3200000
   },
   {
     "name": "Pricing Page Layout Test",
@@ -344,7 +350,8 @@
         "secondaryMetricType": "continuous",
         "sampleSize": 315000
       }
-    ]
+    ],
+    "preregisteredSampleSize": 320000
   },
   {
     "name": "Landing Page Headline Test",
@@ -445,7 +452,8 @@
     ],
     "traffic": 22,
     "trafficSubtitle": "on product pages",
-    "owner": "Marcus"
+    "owner": "Marcus",
+    "preregisteredSampleSize": 480000
   },
   {
     "name": "Newsletter Signup Copy",
@@ -469,7 +477,8 @@
     ],
     "traffic": 35,
     "trafficSubtitle": "sitewide footer",
-    "owner": "Priya"
+    "owner": "Priya",
+    "preregisteredSampleSize": 2100000
   },
   {
     "name": "Autoplay Product Video",
@@ -545,7 +554,8 @@
         "secondaryMetricType": "continuous",
         "sampleSize": 74800
       }
-    ]
+    ],
+    "preregisteredSampleSize": 76000
   },
   {
     "name": "Testimonial Placement",
@@ -593,7 +603,8 @@
     ],
     "traffic": 26,
     "trafficSubtitle": "on mobile checkout",
-    "owner": "Marcus"
+    "owner": "Marcus",
+    "preregisteredSampleSize": 135000
   },
   {
     "name": "Bundle Recommendations",
@@ -618,7 +629,8 @@
     ],
     "traffic": 20,
     "trafficSubtitle": "on cart page",
-    "owner": "Elena"
+    "owner": "Elena",
+    "preregisteredSampleSize": 210000
   },
   {
     "name": "Search Autocomplete V3",
@@ -683,6 +695,7 @@
         "secondaryMetricType": "binary",
         "sampleSize": 885000
       }
-    ]
+    ],
+    "preregisteredSampleSize": 890000
   }
 ]

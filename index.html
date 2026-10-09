@@ -532,12 +532,37 @@
             return { cls, sign, valueDisplay, labelDisplay };
         }
 
+        // A fixed-horizon test needs a sample size committed before launch;
+        // stopping point chosen (or changed) after seeing results inflates the
+        // false positive rate, whether no size was ever preregistered or the
+        // test stopped short of the one that was. Only fixed-horizon tests
+        // carry this risk -- sequential/Bayesian methods are built to be
+        // peeked at, so they have nothing to flag here. Returns null when
+        // there's nothing to flag, so the sample size renders as plain text.
+        function preregAlert(d) {
+            if (d.testMethod !== 'fixed') return null;
+            if (!d.preregisteredSampleSize) {
+                return {
+                    label: 'No prereg',
+                    tip: 'No sample size was preregistered for this fixed-horizon test -- the stopping point may have been chosen after seeing results, inflating the false positive rate.'
+                };
+            }
+            if (d.sampleSize < d.preregisteredSampleSize) {
+                return {
+                    label: `out of ${formatNumber(d.preregisteredSampleSize)}`,
+                    tip: `Stopped at ${formatNumber(d.sampleSize)} of the ${formatNumber(d.preregisteredSampleSize)} preregistered -- stopping before the planned sample size inflates the false positive rate.`
+                };
+            }
+            return null;
+        }
+
         // Render the shared metric/pvalue/sample/power cells as HTML string
         function renderMetricCells(d) {
             const pm = metricProps(d.primaryMetric, d.primaryMetricLabel);
             const sm = metricProps(d.secondaryMetric, d.secondaryMetricLabel);
             const pvalueClass = d.pvalue != null && d.pvalue < 0.05 ? 'pvalue-significant' : 'pvalue-not-significant';
             const powerColor = d.power != null ? sensitivityColor(d.power) : '#999';
+            const prereg = preregAlert(d);
 
             return `
                 <td class="col-metric">
@@ -555,7 +580,12 @@
                 </td>
                 <td class="col-secondary-p pvalue ${d.secondaryPvalue != null && d.secondaryPvalue < 0.05 ? 'pvalue-significant' : 'pvalue-not-significant'}"><span class="pvalue-text">${formatPValue(d.secondaryPvalue)}</span></td>
                 <td class="col-sample">
-                    <div class="sample-size">${formatNumber(d.sampleSize)}</div>
+                    ${prereg
+                        ? `<div class="sample-size-col">
+                                <span class="sample-size sample-size-alert" data-tip="${prereg.tip}">${formatNumber(d.sampleSize)}</span>
+                                <span class="sample-size-stat-label">${prereg.label}</span>
+                           </div>`
+                        : `<div class="sample-size">${formatNumber(d.sampleSize)}</div>`}
                 </td>
                 <td class="col-power">
                     <div class="power-group">
