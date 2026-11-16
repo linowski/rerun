@@ -24,9 +24,16 @@
             </div>
             <div class="header-controls">
                 <div class="mde-input-group">
-                    <label for="mdeInput" class="mde-label">MDE</label>
+                    <label for="powerMethodSelect" class="mde-label">Method</label>
+                    <select id="powerMethodSelect" class="power-method-select" data-tip="Fixed horizon: classic power at a pre-set sample size. Sequential (mSPRT): always-valid p-values safe to check at any time, using an inflated sample-size estimate since there's no fixed stopping point.">
+                        <option value="fixed">Fixed horizon</option>
+                        <option value="sequential">Sequential (mSPRT)</option>
+                    </select>
+                    <label for="mdeInput" class="mde-label mde-label-spaced">MDE</label>
                     <input type="text" id="mdeInput" class="mde-input" value="2" inputmode="decimal" pattern="[0-9]*\.?[0-9]*">
                     <span class="mde-suffix">%</span>
+                    <label for="alphaInput" class="mde-label mde-label-spaced" data-tip="Significance threshold for the P-val columns (fixed horizon only) and the False Positive Risk calculation.">Alpha</label>
+                    <input type="text" id="alphaInput" class="mde-input" value="0.05" inputmode="decimal" pattern="[0-9]*\.?[0-9]*">
                 </div>
                 <input
                     type="search"
@@ -93,6 +100,11 @@
                                 <span class="radio-label">Amplitude</span>
                                 <span class="platform-status platform-status-live">Connected</span>
                             </label>
+                            <label class="radio-option">
+                                <input type="radio" name="platform" value="local-json" class="radio-input">
+                                <span class="radio-label">Local JSON File</span>
+                                <span class="platform-status platform-status-live">Connected</span>
+                            </label>
                         </div>
                         <div class="platform-help-note">
                             <div class="platform-help-title">Need a Custom Integration and Setup?</div>
@@ -126,6 +138,11 @@
                         <label for="csvFileInput" class="csv-file-label">Select CSV File</label>
                         <input type="file" id="csvFileInput" class="form-input" accept=".csv">
                     </div>
+                    <div class="form-group" id="localJsonFileGroup" style="display: none;">
+                        <label for="localJsonFileInput" class="csv-file-label">Select JSON File</label>
+                        <input type="file" id="localJsonFileInput" class="form-input" accept=".json">
+                        <div class="form-hint">An array of experiments already in the standardized shape (see CLAUDE.md) -- not transformed, just loaded as-is.</div>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" id="cancelBtn" class="btn btn-secondary">Cancel</button>
@@ -145,6 +162,14 @@
                 <div class="summary-metric-median">median impact <span id="medianEffectValue"></span></div>
             </div>
             <div class="summary-divider"></div>
+            <div class="summary-panel summary-panel-fpr" id="fprPanel">
+                <div class="summary-panel-header">
+                    <span class="summary-panel-title">False Positive Risk</span>
+                    <span class="summary-panel-subtitle">Probability that a sig. result is a false positive</span>
+                </div>
+                <div class="summary-metric-value" id="fprValue"></div>
+            </div>
+            <div class="summary-divider"></div>
             <div class="summary-panel summary-panel-success">
                 <div class="summary-panel-header">
                     <span class="summary-panel-title">Success Rate of <wbr>Iterations</span>
@@ -159,15 +184,13 @@
                     <span class="summary-panel-title">Testing Sensitivity</span>
                     <span class="summary-panel-subtitle">% of experiments with &ge;80% power / per MDE</span>
                 </div>
-                <div class="summary-sensitivity-thresholds" id="sensitivityThresholds"></div>
-            </div>
-            <div class="summary-divider"></div>
-            <div class="summary-panel summary-panel-fpr">
-                <div class="summary-panel-header">
-                    <span class="summary-panel-title">False Positive Risk</span>
-                    <span class="summary-panel-subtitle">Probability that a sig. result is a false positive</span>
+                <div class="summary-sensitivity-row">
+                    <div class="summary-sensitivity-thresholds" id="sensitivityThresholds"></div>
+                    <div class="summary-sensitivity-median">
+                        <div class="summary-metric-value" id="medianMdeAt80Value"></div>
+                        <div class="summary-metric-median">median MDE</div>
+                    </div>
                 </div>
-                <div class="summary-metric-value" id="fprValue"></div>
             </div>
         </div>
 
@@ -252,6 +275,15 @@
             <div id="placeholderPanel" class="tab-params-panel">
                 <span class="tab-param-text custom-panel-placeholder">Placeholder to add custom rules in the future</span>
             </div>
+
+            <!-- Rerun tab: save the list to a JSON file, or load one saved earlier. -->
+            <div id="rerunActionsPanel" class="tab-params-panel">
+                <span class="tab-param-text">Rerun list file:</span>
+                <button type="button" id="rerunExportBtn" class="import-status-refresh" data-tip="Download this list (types, notes, tags) as JSON. It links to experiments by id, so import it alongside the same data.">Export JSON</button>
+                <span class="tab-param-text">·</span>
+                <button type="button" id="rerunImportBtn" class="import-status-refresh" data-tip="Add the entries from a rerun list file to this list. Entries for experiments not in the loaded data are skipped.">Import JSON</button>
+                <input type="file" id="rerunImportInput" accept=".json,application/json" hidden>
+            </div>
         </div>
 
         <div id="highlightNav" class="highlight-nav" data-tip="Jump between highlighted rows (↑ / ↓)">
@@ -277,9 +309,12 @@
                          wrap: the two metric columns need ~10% to fit "Primary
                          metric" and "Secondary metric" plus their sort arrows. -->
                     <col style="width: 10%;">
-                    <col style="width: 5%;">
+                    <!-- P-val: fixed, not a percentage -- the sequential-mode
+                         pill (58px) plus the cell's own padding needs ~82px
+                         at any table width, not a share that can shrink below it. -->
+                    <col style="width: 82px;">
                     <col style="width: 10%;">
-                    <col style="width: 5%;">
+                    <col style="width: 82px;">
                     <col style="width: 8%;">
                     <!-- Power: one badge plus its MDE label. -->
                     <col style="width: 88px;">
@@ -341,19 +376,33 @@
             return parseFloat(document.getElementById('mdeInput').value) || 2;
         }
 
+        function getPowerMethod() {
+            return document.getElementById('powerMethodSelect')?.value || 'fixed';
+        }
+
+        // Significance threshold for the P-val columns (fixed horizon only)
+        // and the False Positive Risk calculation -- see pvalueCell and
+        // updateSummaryBar. Sequential mode keeps its own fixed
+        // SEQUENTIAL_ALPHA, out of scope for this control.
+        function getSelectedAlpha() {
+            const value = parseFloat(document.getElementById('alphaInput')?.value);
+            return value > 0 && value < 1 ? value : 0.05;
+        }
+
         function getExperimentBaseRate(experiment) {
             return experiment.baseRate || DEFAULT_BASE_RATE;
         }
 
         function withCalculatedStats(data) {
             const mde = getSelectedMde();
+            const method = getPowerMethod();
             return (Array.isArray(data) ? data : []).map(experiment => {
                 const baseRate = getExperimentBaseRate(experiment);
-                const calculated = calculateStatsForItem(experiment, baseRate, mde);
+                const calculated = calculateStatsForItem(experiment, baseRate, mde, method);
 
                 if (Array.isArray(experiment.additionalComparisons)) {
                     calculated.additionalComparisons = experiment.additionalComparisons.map(comp =>
-                        calculateStatsForItem(comp, baseRate, mde)
+                        calculateStatsForItem(comp, baseRate, mde, method)
                     );
                 }
 
@@ -361,7 +410,24 @@
             });
         }
 
-        function calculateStatsForItem(item, baseRate, mde) {
+        // Fixed-horizon: classic power at the pre-set sample size, plain
+        // p-values. Sequential (mSPRT): the always-valid p-value (safe to
+        // check at any time) in place of the plain p-value, and power
+        // approximated via the ~1.3x sample-size inflation the method costs
+        // relative to fixed-horizon for the same power (see
+        // SEQUENTIAL_SAMPLE_SIZE_INFLATION in stats-utils.js) -- there is no
+        // exact closed form for sequential power the way there is for a
+        // one-shot z-test.
+        function calculateStatsForItem(item, baseRate, mde, method) {
+            if (method === 'sequential') {
+                const effectiveSampleSize = item.sampleSize / SEQUENTIAL_SAMPLE_SIZE_INFLATION;
+                return {
+                    ...item,
+                    power: recalculatePower(effectiveSampleSize, item.primaryMetricType, mde, baseRate),
+                    pvalue: recalculateSequentialPValue(item.sampleSize, item.primaryMetricType, item.primaryMetric, baseRate),
+                    secondaryPvalue: recalculateSequentialPValue(item.sampleSize, item.secondaryMetricType, item.secondaryMetric, baseRate)
+                };
+            }
             return {
                 ...item,
                 power: recalculatePower(item.sampleSize, item.primaryMetricType, mde, baseRate),
@@ -383,6 +449,17 @@
             return countLabel(num);
         }
 
+        // Compact "~X / day" sub-label for the Sample size column, e.g.
+        // "815 / day" or "1.2k / day". Rounded and abbreviated since this is
+        // a feel-for-the-pace figure, not an exact count. Blank when unknown.
+        function formatSamplePerDay(perDay) {
+            if (perDay === null || perDay === undefined) return '';
+            const abbreviated = perDay >= 1000
+                ? `${(perDay / 1000).toFixed(perDay >= 10000 ? 0 : 1)}k`
+                : Math.round(perDay).toString();
+            return `${abbreviated} / day`;
+        }
+
         // Format p-value for display
         function formatPValue(p) {
             if (p === null || p === undefined) return '';
@@ -396,18 +473,44 @@
             return suffix ? `${value}${suffix}` : value;
         }
 
-        // Concise launch date like "Jun 3, 2025". Blank when missing/invalid.
-        function formatLaunchDate(date) {
-            if (!date) return '';
-            // A bare "YYYY-MM-DD" parses as UTC midnight, which is the
-            // previous day west of Greenwich; read it as a local date instead.
+        // A bare "YYYY-MM-DD" parses as UTC midnight, which is the previous
+        // day west of Greenwich; read it as a local date instead. Returns
+        // null when missing/invalid.
+        function parseLocalDate(date) {
+            if (!date) return null;
             const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
             const d = dateOnly
                 ? new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]))
                 : new Date(date);
-            if (isNaN(d)) return '';
+            return isNaN(d) ? null : d;
+        }
+
+        // Concise launch date like "Jun 3, 2025". Blank when missing/invalid.
+        function formatLaunchDate(date) {
+            const d = parseLocalDate(date);
+            if (!d) return '';
             const month = d.toLocaleString('en-US', { month: 'short' });
             return `${month} ${d.getDate()}, ${d.getFullYear()}`;
+        }
+
+        // Days between an experiment's startDate and its (end) date, used to
+        // turn a raw sample size into a daily rate. Needs both ends and at
+        // least 1 day between them -- null otherwise, so callers can fall
+        // back to the plain sample size with no rate shown.
+        function daysRunning(item) {
+            const start = parseLocalDate(item.startDate);
+            const end = parseLocalDate(item.date);
+            if (!start || !end) return null;
+            const days = Math.round((end - start) / 86400000);
+            return days > 0 ? days : null;
+        }
+
+        // Average daily sample size, or null when there's no known duration
+        // to divide by (see daysRunning).
+        function samplePerDay(item) {
+            const days = daysRunning(item);
+            if (!days || !item.sampleSize) return null;
+            return item.sampleSize / days;
         }
 
         // Placeholder shown in a cell that has no value to display.
@@ -525,8 +628,11 @@
         // Compute metric display properties from raw values
         function metricProps(value, label) {
             const hasValue = value !== null && value !== undefined && value !== '' && !isNaN(Number(value));
-            const cls = hasValue ? (Number(value) >= 0 ? 'metric-positive' : 'metric-negative') : '';
-            const sign = hasValue && Number(value) >= 0 ? '+' : '';
+            // Zero is neither a win nor a loss: no sign and no colour, so it
+            // also never reads as "positive" to the tab rules that check the sign.
+            const n = Number(value);
+            const cls = !hasValue || n === 0 ? '' : n > 0 ? 'metric-positive' : 'metric-negative';
+            const sign = hasValue && n > 0 ? '+' : '';
             const valueDisplay = hasValue ? `${sign}${value}%` : '';
             const labelDisplay = label || '';
             return { cls, sign, valueDisplay, labelDisplay };
@@ -556,13 +662,68 @@
             return null;
         }
 
+        // Maps a p-value onto the same 0-100 red-orange-green scale as the
+        // power badge, so both columns read consistently: p == alpha lands at
+        // the 50% (orange) boundary rather than an arbitrary point. Fixed
+        // horizon cuts at the header's Alpha input; Sequential keeps its own
+        // fixed SEQUENTIAL_ALPHA (p <= alpha is the mSPRT's stopping rule, valid
+        // whenever you check -- see stats-utils.js).
+        const SEQUENTIAL_ALPHA = 0.05;
+        function pvalueStrength(pvalue, alpha) {
+            if (pvalue <= alpha) {
+                // Below the threshold: 50-100%, p=0 -> 100%, p=alpha -> 50%.
+                return 50 + 50 * (1 - pvalue / alpha);
+            }
+            // Above the threshold: 0-50%, scaled over the remaining p range
+            // so it reaches 0% at p=1 rather than dropping off a cliff.
+            return 50 * (1 - (pvalue - alpha) / (1 - alpha));
+        }
+
+        // Dims the "<" in "< 0.001" relative to the number, and shrinks the
+        // number itself slightly too -- "0.001" here is a display floor
+        // (the real p-value is just somewhere below it), not the measured
+        // figure a plain p-value is, so it doesn't need the same full-size
+        // weight as an actual value like "0.031" would.
+        function formatPValueHtml(pvalue) {
+            const text = formatPValue(pvalue);
+            return text.startsWith('< ')
+                ? `<span class="pvalue-lt">&lt;</span> <span class="pvalue-lt-value">${text.slice(2)}</span>`
+                : text;
+        }
+
+        // A solid badge in both modes, coloured by pvalueStrength -- the same
+        // treatment as the Power column, so switching Method doesn't change
+        // how the column reads.
+        function pvalueCell(colClass, pvalue, isSequential) {
+            if (pvalue == null) return `<td class="${colClass} pvalue"></td>`;
+            const alpha = isSequential ? SEQUENTIAL_ALPHA : getSelectedAlpha();
+            const color = sensitivityColor(pvalueStrength(pvalue, alpha));
+            return `<td class="${colClass} pvalue"><span class="pvalue-text pvalue-badge" style="background-color: ${color}">${formatPValueHtml(pvalue)}</span></td>`;
+        }
+
+        // Sample size, then up to two small lines under it: the prereg alert
+        // (when there is one) and the average daily rate (when the dates allow).
+        function renderSampleCell(d) {
+            const prereg = preregAlert(d);
+            const perDay = samplePerDay(d);
+            const count = formatNumber(d.sampleSize);
+            if (!prereg && perDay == null) return `<div class="sample-size">${count}</div>`;
+            return `<div class="sample-size-col">
+                ${prereg
+                    ? `<span class="sample-size sample-size-alert" data-tip="${prereg.tip}">${count}</span>
+                       <span class="sample-size-stat-label">${prereg.label}</span>`
+                    : `<span class="sample-size">${count}</span>`}
+                ${perDay != null
+                    ? `<span class="sample-size-rate" data-tip="Averaged over ${daysRunning(d)} days, ${formatLaunchDate(d.startDate)} to ${formatLaunchDate(d.date)}.">${formatSamplePerDay(perDay)}</span>`
+                    : ''}
+            </div>`;
+        }
+
         // Render the shared metric/pvalue/sample/power cells as HTML string
         function renderMetricCells(d) {
             const pm = metricProps(d.primaryMetric, d.primaryMetricLabel);
             const sm = metricProps(d.secondaryMetric, d.secondaryMetricLabel);
-            const pvalueClass = d.pvalue != null && d.pvalue < 0.05 ? 'pvalue-significant' : 'pvalue-not-significant';
-            const powerColor = d.power != null ? sensitivityColor(d.power) : '#999';
-            const prereg = preregAlert(d);
+            const isSequential = getPowerMethod() === 'sequential';
 
             return `
                 <td class="col-metric">
@@ -571,26 +732,21 @@
                         <span class="metric-label">${pm.labelDisplay}${d.primaryMetricType ? ` (${d.primaryMetricType})` : ''}</span>
                     </div>
                 </td>
-                <td class="col-metric-p pvalue ${pvalueClass}"><span class="pvalue-text">${formatPValue(d.pvalue)}</span></td>
+                ${pvalueCell('col-metric-p', d.pvalue, isSequential)}
                 <td class="col-secondary">
                     <div class="metric-container secondary-metric ${sm.cls}">
                         <span class="${sm.cls}">${sm.valueDisplay}</span>
                         <span class="metric-label">${sm.labelDisplay}${d.secondaryMetricType ? ` (${d.secondaryMetricType})` : ''}</span>
                     </div>
                 </td>
-                <td class="col-secondary-p pvalue ${d.secondaryPvalue != null && d.secondaryPvalue < 0.05 ? 'pvalue-significant' : 'pvalue-not-significant'}"><span class="pvalue-text">${formatPValue(d.secondaryPvalue)}</span></td>
-                <td class="col-sample">
-                    ${prereg
-                        ? `<div class="sample-size-col">
-                                <span class="sample-size sample-size-alert" data-tip="${prereg.tip}">${formatNumber(d.sampleSize)}</span>
-                                <span class="sample-size-stat-label">${prereg.label}</span>
-                           </div>`
-                        : `<div class="sample-size">${formatNumber(d.sampleSize)}</div>`}
-                </td>
+                ${pvalueCell('col-secondary-p', d.secondaryPvalue, isSequential)}
+                <td class="col-sample">${renderSampleCell(d)}</td>
                 <td class="col-power">
                     <div class="power-group">
                         <div class="power-col">
-                            <span class="power-value power-badge" style="background-color: ${powerColor}">${displayValue(d.power, '%')}</span>
+                            <span class="power-value power-badge" style="background-color: ${d.power != null ? sensitivityColor(d.power) : '#999'}"${isSequential
+                                ? ` data-tip="Approximate: sequential (mSPRT) power, estimated as fixed-horizon power at this sample size ÷ ${SEQUENTIAL_SAMPLE_SIZE_INFLATION} -- the extra sample an always-valid test needs for the same power."`
+                                : ''}>${isSequential && d.power != null ? '<span class="power-approx">≈</span>' : ''}${displayValue(d.power, '%')}</span>
                             <span class="power-stat-label">${getSelectedMde()}% MDE</span>
                         </div>
                     </div>
@@ -802,6 +958,9 @@
 
         const RERUN_SELECTION_KEY = 'rerun_selected_keys';
         const ACTIVE_TAB_KEY = 'rerun_active_tab';
+        const MDE_KEY = 'rerun_mde';
+        const POWER_METHOD_KEY = 'rerun_power_method';
+        const ALPHA_KEY = 'rerun_alpha';
 
         // Startup ordering: a restored cache (API or import) renders rows and runs
         // highlighting/sorting synchronously while this script is still executing,
@@ -832,6 +991,21 @@
         //
         // Declared early (before any data load) because a restored cache can
         // render rows and run highlighting synchronously during script startup.
+        //
+        // Too Good To Be False matches a promising result two ways: a primary
+        // that clearly won, or a secondary that clearly won. A significant
+        // primary *loss* is left out of the second: a win on one metric against
+        // a loss on the other is a tradeoff, not a missed win.
+        function unshippedPrimaryWin({ metric, pvalue }, p) {
+            return metric > p.minWin.value && pvalue != null && pvalue < p.pSig.value;
+        }
+
+        function secondaryCarriesIt({ metric, pvalue, secondary, secondaryPvalue }, p) {
+            const primaryLost = metric < 0 && pvalue != null && pvalue < p.pSig.value;
+            return !primaryLost && (secondary || '').startsWith('+')
+                && secondaryPvalue != null && secondaryPvalue < p.pSecondary.value;
+        }
+
         const TAB_CONFIG = {
             rerun: {
                 title: 'Your Rerun List',
@@ -938,12 +1112,15 @@
             },
             'false-neg': {
                 title: 'Too Good To Be False',
-                subtitle: 'Find the false negatives worth replicating at higher power.',
+                subtitle: 'Promising results that weren’t shipped? Maybe worth double checking.',
                 countSubtitle: (matchCount, totalCount) =>
-                    `${matchCount} out of ${totalCount} experiments may be false negatives worth replicating at higher power.`,
+                    `${matchCount} out of ${totalCount} experiments look promising but weren’t shipped, worth double checking.`,
                 params: {
-                    maxEffect: { value: 0, step: 0.5, suffix: '%' },
-                    pMin: { value: 0.05, step: 0.01, min: 0, max: 1 },
+                    // Way 1: a significant primary win that still wasn't shipped.
+                    minWin: { value: 0, step: 0.5, suffix: '%' },
+                    pSig: { value: 0.05, step: 0.01, min: 0, max: 1 },
+                    // Way 2: a significant secondary win.
+                    pSecondary: { value: 0.05, step: 0.01, min: 0, max: 1 },
                     // A promising result that was never shipped is exactly what this
                     // tab is for by default; one that already shipped has already had
                     // its second look.
@@ -951,18 +1128,21 @@
                 },
                 template: p => [
                     'Highlight when', { param: 'decisionFilter' },
-                    'and effect <', { param: 'maxEffect' },
-                    ', p-value >', { param: 'pMin' }, ' and secondary is positive'
+                    'and either effect >', { param: 'minWin' },
+                    'with p-value <', { param: 'pSig' },
+                    ', or secondary is positive with p-value <', { param: 'pSecondary' }
                 ],
-                matches: ({ metric, pvalue, secondary, decision }, p) =>
-                    decisionMatches(decision, p.decisionFilter.value)
-                    && metric < p.maxEffect.value && pvalue > p.pMin.value && (secondary || '').startsWith('+'),
+                matches: (row, p) =>
+                    decisionMatches(row.decision, p.decisionFilter.value)
+                    && (unshippedPrimaryWin(row, p) || secondaryCarriesIt(row, p)),
+                // Each cell lights for the way the row actually matched, so a
+                // strong-primary row doesn't also light an irrelevant secondary.
                 signals: {
                     decision: decisionSignal,
-                    primary: ({ metric }, p) => metric < p.maxEffect.value,
-                    primaryP: ({ pvalue }, p) => pvalue > p.pMin.value,
-                    secondary: ({ secondary }) => (secondary || '').startsWith('+'),
-                    secondaryP: ({ secondaryPvalue }) => secondaryPvalue != null && secondaryPvalue < 0.05
+                    primary: (row, p) => unshippedPrimaryWin(row, p),
+                    primaryP: (row, p) => unshippedPrimaryWin(row, p),
+                    secondary: (row, p) => secondaryCarriesIt(row, p),
+                    secondaryP: (row, p) => secondaryCarriesIt(row, p)
                 }
             },
             segments: {
@@ -1249,6 +1429,25 @@
                 description: 'Each change builds on the last.',
                 variants: [{ text: 'A' }, { text: 'B' }, { text: 'B+C' }],
                 icon: 'x→x\''
+            },
+            // Decisions rather than test designs: some candidates don't need
+            // another run, just acting on. Grouped under "Decide" in the
+            // dropdown; no diagram, since there's no new test to draw.
+            {
+                id: 'ship-it',
+                label: 'Ship it',
+                group: 'Decide',
+                description: 'No rerun: roll the winning variant out.',
+                variants: [],
+                icon: '✓'
+            },
+            {
+                id: 'unship-it',
+                label: 'Unship it',
+                group: 'Decide',
+                description: 'No rerun: roll back to the original.',
+                variants: [],
+                icon: '↩'
             }
         ];
 
@@ -1280,7 +1479,9 @@
             remove: glyphSvg('&#8709;', 15, 500),
             invert: glyphSvg('&#8722;x', 11.5),
             intensity: glyphSvg('x++', 10),
-            cascade: glyphSvg('x&#8594;x&#8217;', 7.5)
+            cascade: glyphSvg('x&#8594;x&#8217;', 7.5),
+            'ship-it': glyphSvg('&#10003;', 14, 500),
+            'unship-it': glyphSvg('&#8617;', 14, 500)
         };
 
         const RERUN_TYPE_BY_ID = new Map(RERUN_TYPES.map(t => [t.id, t]));
@@ -1296,7 +1497,11 @@
         const TAB_RECOMMENDED_RERUN_TYPES = {
             'almost-significant': { default: 'meta-analyze', alternates: ['leap-compound'] },
             lemon: { default: 'intensity', alternates: ['intensify', 'leap-compound'] },
-            'big-losers': { default: 'invert', alternates: ['reduce', 'remove'] }
+            'big-losers': { default: 'invert', alternates: ['reduce', 'remove'] },
+            // A shaky shipped win, or a promising unshipped one, may just need
+            // its decision reversed rather than another run.
+            'false-pos': { default: DEFAULT_RERUN_TYPE, alternates: ['unship-it'] },
+            'false-neg': { default: DEFAULT_RERUN_TYPE, alternates: ['ship-it'] }
         };
 
         function rerunTypeFor(key) {
@@ -1346,19 +1551,38 @@
                 ? new Set([recommended.default, ...recommended.alternates])
                 : null;
 
+            // Label only: the description is shown beneath the control.
+            const option = t => el('option', {
+                value: t.id,
+                textContent: t.label,
+                selected: t.id === current,
+                class: recommendedIds?.has(t.id) ? 'rerun-type-option-recommended' : null
+            });
+            // Test designs first, then each group (Decide) set off by a divider
+            // line rather than a heading row. The divider is a disabled option
+            // drawn with box-drawing characters, not an <hr>: the browser paints
+            // the open list itself and ignores CSS on an <hr> there, while it
+            // does honour an option's text colour.
+            const groups = [...new Set(RERUN_TYPES.filter(t => t.group).map(t => t.group))];
+            const divider = () => el('option', {
+                class: 'rerun-type-divider',
+                disabled: true,
+                textContent: '─'.repeat(28),
+                'aria-hidden': 'true'
+            });
             const select = el('select', {
                 // A chosen structure reads as a decision, so it fills like the tag
                 // toggles do; the default stays quiet.
                 class: 'rerun-type-select' + (current !== DEFAULT_RERUN_TYPE ? ' is-set' : ''),
                 id: selectId,
                 dataset: { entryKey: key }
-            // Label only: the description is shown beneath the control.
-            }, RERUN_TYPES.map(t => el('option', {
-                value: t.id,
-                textContent: t.label,
-                selected: t.id === current,
-                class: recommendedIds?.has(t.id) ? 'rerun-type-option-recommended' : null
-            })));
+            }, [
+                ...RERUN_TYPES.filter(t => !t.group).map(option),
+                ...groups.flatMap(group => [
+                    divider(),
+                    ...RERUN_TYPES.filter(t => t.group === group).map(option)
+                ])
+            ]);
 
             // Label, dropdown, diagram and description all on one line: the
             // row's own icon (applyRerunButtonState) already carries the chosen
@@ -1406,6 +1630,149 @@
         // A row of real cells, one per header, so each tag group lands under the
         // column it acts on whatever order the columns are in. Each tag is an
         // independent toggle, so a rerun can be tagged on more than one axis.
+        // A row of screenshots for the experiment's own arms (where a data
+        // source provides them): small thumbnails on the left (one column per
+        // arm, so every shot stays visible at a glance), a large always-on
+        // preview per arm on the right using the rest of the row's width --
+        // one big image per arm, defaulting to its first shot, swapped by
+        // clicking any of that arm's thumbnails. Returns null when the
+        // experiment has none, so the caller can skip inserting a row at all.
+        function buildRerunScreenshotRow(selectionKey, isSubRow) {
+            const item = experimentForSelectionKey(selectionKey);
+            const screenshots = item?.screenshots;
+            if (!screenshots || !screenshots.length) return null;
+
+            const byArm = new Map();
+            screenshots.forEach(s => {
+                const armKey = s.arm || '';
+                if (!byArm.has(armKey)) byArm.set(armKey, { armLabel: s.armLabel, shots: [] });
+                byArm.get(armKey).shots.push(s);
+            });
+
+            const arms = Array.from(byArm.entries());
+            const previewImgs = new Map(); // armKey -> the arm's large <img>
+
+            function labelFor(s, armLabel) {
+                return [armLabel, s.viewport, s.pageState].filter(Boolean).join(' — ');
+            }
+
+            // A shot's "slot" is the part that's comparable across arms --
+            // same viewport, same page state -- everything except which arm
+            // took it. Clicking a thumbnail whose slot every other arm also
+            // has switches all of them together (see the click handler
+            // below), since the common case is comparing the same state
+            // across arms, not mixing states.
+            function slotFor(s) {
+                return `${s.viewport}::${s.pageState || ''}`;
+            }
+
+            // Always labelled, even when the data names no arm, so the thumbnail
+            // strip lines up with the preview captions beside it.
+            const thumbColumns = arms.map(([armKey, { armLabel, shots }]) =>
+                el('div', { class: 'rerun-screenshot-group' }, [
+                    el('div', {
+                        class: 'rerun-screenshot-arm-label',
+                        textContent: armLabel || (armKey ? `Arm ${armKey}` : 'Screenshot')
+                    }),
+                    el('div', { class: 'rerun-screenshot-thumbs' },
+                        shots.map((s, i) => el('img', {
+                            class: 'rerun-screenshot-thumb' + (i === 0 ? ' is-previewed' : ''),
+                            // Path is repo-root-relative (e.g. "_data/<project>/screenshots/..."),
+                            // same as the JSON stores it -- only resolves when
+                            // served locally (Live Server, `python -m http.server`),
+                            // since _data/ is never published.
+                            src: s.file,
+                            loading: 'lazy',
+                            alt: labelFor(s, armLabel),
+                            'data-tip': labelFor(s, armLabel),
+                            dataset: { arm: armKey, slot: slotFor(s) }
+                        })))
+                ].filter(Boolean)));
+
+            const previewColumns = arms.map(([armKey, { armLabel, shots }]) => {
+                const first = shots[0];
+                const img = el('img', {
+                    class: 'rerun-screenshot-preview-img',
+                    src: first.file,
+                    alt: labelFor(first, armLabel)
+                });
+                previewImgs.set(armKey, img);
+                return el('div', { class: 'rerun-screenshot-preview-col' }, [
+                    el('div', { class: 'rerun-screenshot-preview-caption', textContent: labelFor(first, armLabel) }),
+                    el('div', { class: 'rerun-screenshot-preview-frame' }, img)
+                ]);
+            });
+
+            const row = el('tr', { class: 'rerun-screenshot-row' + (isSubRow ? ' sub-row-screenshots' : '') },
+                el('td', { colSpan: tableColumnCount() },
+                    el('div', { class: 'rerun-screenshot-layout' }, [
+                        el('div', { class: 'rerun-screenshot-strip' }, thumbColumns),
+                        el('div', { class: 'rerun-screenshot-preview-row' }, previewColumns)
+                    ])));
+
+            // Swaps one arm's large preview to a specific thumbnail's shot,
+            // and marks that thumbnail as the one currently previewed within
+            // its own arm's thumbnail list.
+            function showThumbInPreview(thumb) {
+                const armKey = thumb.dataset.arm;
+                const previewImg = previewImgs.get(armKey);
+                if (!previewImg || previewImg.src === thumb.src) return;
+                previewImg.src = thumb.src;
+                previewImg.alt = thumb.alt;
+                previewImg.closest('.rerun-screenshot-preview-col')
+                    .querySelector('.rerun-screenshot-preview-caption').textContent = thumb.alt;
+                row.querySelectorAll(`.rerun-screenshot-thumb[data-arm="${CSS.escape(armKey)}"]`)
+                    .forEach(t => t.classList.toggle('is-previewed', t === thumb));
+            }
+
+            // Clicking a thumbnail swaps its own arm's preview, and -- when
+            // every other arm has a shot in the same slot (same viewport +
+            // page state) -- swaps those too, so comparing the same state
+            // across arms is one click instead of one per arm. Delegated on
+            // the row itself since thumbnails are rebuilt from scratch every
+            // sync (see syncRerunNoteRows).
+            row.addEventListener('click', e => {
+                const thumb = e.target.closest('.rerun-screenshot-thumb');
+                if (!thumb) return;
+                showThumbInPreview(thumb);
+
+                const slot = thumb.dataset.slot;
+                const clickedArm = thumb.dataset.arm;
+                row.querySelectorAll('.rerun-screenshot-thumb').forEach(other => {
+                    if (other.dataset.arm === clickedArm) return;
+                    if (other.dataset.slot !== slot) return;
+                    if (!other.classList.contains('is-previewed')) showThumbInPreview(other);
+                });
+            });
+
+            // Scrolling one arm's preview scrolls every other arm's preview
+            // to the same fraction of its own height -- a ratio, not a raw
+            // pixel offset, since two arms' full-page captures are rarely
+            // the exact same height. Guarded against feedback loops: setting
+            // .scrollTop on the other frames fires their own scroll event,
+            // which would otherwise re-trigger this handler on each of them.
+            if (previewColumns.length > 1) {
+                const frames = Array.from(row.querySelectorAll('.rerun-screenshot-preview-frame'));
+                let syncing = false;
+                frames.forEach(frame => {
+                    frame.addEventListener('scroll', () => {
+                        if (syncing) return;
+                        syncing = true;
+                        const range = frame.scrollHeight - frame.clientHeight;
+                        const fraction = range > 0 ? frame.scrollTop / range : 0;
+                        frames.forEach(other => {
+                            if (other === frame) return;
+                            const otherRange = other.scrollHeight - other.clientHeight;
+                            other.scrollTop = fraction * otherRange;
+                        });
+                        syncing = false;
+                    });
+                });
+            }
+
+            return row;
+        }
+
         function buildRerunTagRow(key, isSubRow) {
             const selected = detailFor(key).tags || new Set();
             const byColumn = new Map(RERUN_TAG_GROUPS.map(g => [g.column, g]));
@@ -1503,6 +1870,25 @@
 
         function experimentSelectionKey(item) {
             return item.id || item.name || '';
+        }
+
+        // Not every data source carries screenshots (it's an optional import
+        // field, not part of the base dummy dataset), so this looks the raw
+        // item up by selectionKey rather than assuming the caller already
+        // has it, and returns undefined when there's nothing to show.
+        function experimentForSelectionKey(selectionKey) {
+            return (calculatedExperimentsData || [])
+                .find(item => experimentSelectionKey(item) === selectionKey);
+        }
+
+        // Like experimentForSelectionKey, but also resolves a comparison's
+        // "id::variation" key to the comparison itself.
+        function itemForSelectionKey(selectionKey) {
+            const experiment = experimentForSelectionKey(selectionKey);
+            if (experiment) return experiment;
+            const parent = experimentForSelectionKey(selectionKey.split('::')[0]);
+            return parent?.additionalComparisons?.find(comp =>
+                comparisonSelectionKey(parent, comp) === selectionKey);
         }
 
         function comparisonSelectionKey(experiment, comparison) {
@@ -2159,7 +2545,7 @@
                 let lastRow = startRow;
                 let node = startRow.nextElementSibling;
                 while (node) {
-                    const isOwnAuxRow = node.classList.contains('rerun-tag-row') || node.classList.contains('rerun-note-row');
+                    const isOwnAuxRow = node.classList.contains('rerun-tag-row') || node.classList.contains('rerun-note-row') || node.classList.contains('rerun-screenshot-row');
                     const sameGroup = node.dataset.compoundGroup === groupId;
                     if (!isOwnAuxRow && !sameGroup) break;
                     if (isOwnAuxRow || sameGroup) lastRow = node;
@@ -2452,6 +2838,7 @@
         const IMPORT_API_KEY_KEY = 'last_import_api_key';
         const IMPORT_TIMESTAMP_KEY = 'last_import_timestamp';
         const IMPORT_MAPPED_DATA_KEY = 'last_import_mapped_data';
+        const IMPORT_FILE_NAME_KEY = 'last_import_file_name';
 
         const dataSourceToggle = document.getElementById('dataSourceToggle');
         const modal = document.getElementById('apiConfigModal');
@@ -2481,6 +2868,13 @@
         const csvAccountId = document.getElementById('csvAccountId');
         const apiKeyGroup = document.getElementById('apiKeyGroup');
         const csvFileGroup = document.getElementById('csvFileGroup');
+        const localJsonFileInput = document.getElementById('localJsonFileInput');
+        const localJsonFileGroup = document.getElementById('localJsonFileGroup');
+        // Picking the file is the whole decision for a local JSON import, so it
+        // loads straight away rather than waiting on OK.
+        localJsonFileInput.addEventListener('change', () => {
+            if (localJsonFileInput.files[0]) okBtn.click();
+        });
 
         // Load saved account ID from localStorage (or legacy sessionStorage)
         const savedAccountId = localStorage.getItem(IMPORT_ACCOUNT_ID_KEY) || sessionStorage.getItem('convert_account_id');
@@ -2532,10 +2926,18 @@
             if (platform === 'csv') {
                 apiKeyGroup.style.display = 'none';
                 csvFileGroup.style.display = 'block';
+                localJsonFileGroup.style.display = 'none';
+                return;
+            }
+            if (platform === 'local-json') {
+                apiKeyGroup.style.display = 'none';
+                csvFileGroup.style.display = 'none';
+                localJsonFileGroup.style.display = 'block';
                 return;
             }
             apiKeyGroup.style.display = 'block';
             csvFileGroup.style.display = 'none';
+            localJsonFileGroup.style.display = 'none';
 
             amplitudeResultsGroup.style.display = platform === 'amplitude' ? 'block' : 'none';
             if (platform === 'amplitude') updateAmplitudeSignInStatus();
@@ -2616,9 +3018,11 @@
             apiKeyHint.textContent = '';
             csvFileInput.value = '';
             csvAccountId.value = '';
+            localJsonFileInput.value = '';
             // Reset to show API key input by default
             apiKeyGroup.style.display = 'block';
             csvFileGroup.style.display = 'none';
+            localJsonFileGroup.style.display = 'none';
             // If no data loaded yet (modal was auto-opened on page load), load dummy data
             if (!initialDataLoaded) {
                 loadData(true);
@@ -2685,6 +3089,47 @@
                     } else {
                         alert('No valid data found in CSV file. Make sure it is a Convert aggregated report export with control (A) and variation (B) rows.');
                     }
+                };
+                reader.readAsText(file);
+            } else if (platform === 'local-json') {
+                // Load a JSON file already in the standardized experiment
+                // shape -- no mapper involved, just parsed and rendered as-is.
+                const file = localJsonFileInput.files[0];
+
+                if (!file) {
+                    alert('Please select a JSON file');
+                    return;
+                }
+
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    let parsedData;
+                    try {
+                        parsedData = JSON.parse(e.target.result);
+                    } catch (error) {
+                        alert('Could not parse that file as JSON: ' + error.message);
+                        return;
+                    }
+
+                    if (!Array.isArray(parsedData) || parsedData.length === 0) {
+                        alert('Expected a JSON array of experiments (see CLAUDE.md for the shape), but got something else.');
+                        return;
+                    }
+
+                    rememberDialogChoice('local-json');
+                    refreshUI(parsedData);
+                    setImportStatus(`Loaded ${file.name}`);
+
+                    saveImportConfig('local-json', { mappedData: parsedData, fileName: file.name })
+                        .catch(error => console.error('Could not persist import:', error));
+
+                    modal.classList.remove('show');
+                    localJsonFileInput.value = '';
+                    apiKeyGroup.style.display = 'block';
+                    localJsonFileGroup.style.display = 'none';
+                    document.querySelectorAll('input[name="platform"]').forEach(radio => {
+                        radio.checked = false;
+                    });
                 };
                 reader.readAsText(file);
             } else {
@@ -2846,6 +3291,11 @@
                 localStorage.setItem(IMPORT_PLATFORM_KEY, platform);
                 localStorage.setItem(IMPORT_TIMESTAMP_KEY, Date.now().toString());
                 if (opts.accountId) localStorage.setItem(IMPORT_ACCOUNT_ID_KEY, opts.accountId);
+                if (opts.fileName) {
+                    localStorage.setItem(IMPORT_FILE_NAME_KEY, opts.fileName);
+                } else {
+                    localStorage.removeItem(IMPORT_FILE_NAME_KEY);
+                }
                 if (opts.apiKey) {
                     sessionStorage.setItem(IMPORT_API_KEY_KEY, opts.apiKey);
                     localStorage.removeItem(IMPORT_API_KEY_KEY);
@@ -2879,6 +3329,7 @@
             localStorage.removeItem(IMPORT_API_KEY_KEY);
             localStorage.removeItem(IMPORT_TIMESTAMP_KEY);
             localStorage.removeItem(IMPORT_MAPPED_DATA_KEY);
+            localStorage.removeItem(IMPORT_FILE_NAME_KEY);
             sessionStorage.removeItem(IMPORT_API_KEY_KEY);
             // Also clear any legacy CSV content that may exist
             localStorage.removeItem('last_import_csv');
@@ -3121,6 +3572,21 @@
                     if (accountId) csvAccountId.value = accountId;
                     dataSourceToggle.checked = false;
                     console.log(`CSV import settings found from cache (${cacheDate}), but no mapped data was cached; loading dummy data instead.`);
+                    return false;
+                } else if (platform === 'local-json') {
+                    const parsedData = await readStoredImportData();
+
+                    if (parsedData) {
+                        refreshUI(parsedData);
+                        dataSourceToggle.checked = true;
+                        const fileName = localStorage.getItem(IMPORT_FILE_NAME_KEY);
+                        setImportStatus(fileName ? `Loaded ${fileName}` : '');
+                        console.log(`Restored local JSON import from cache (${cacheDate}):`, parsedData.length, 'experiments');
+                        return true;
+                    }
+
+                    dataSourceToggle.checked = false;
+                    console.log(`Local JSON import settings found from cache (${cacheDate}), but no mapped data was cached; loading dummy data instead.`);
                     return false;
                 } else if (platform === 'growthbook') {
                     const apiKey = getSavedApiKey();
@@ -3410,7 +3876,6 @@
             if (getActiveTabType() === 'rerun') {
                 renderView('rerun');
                 updateTitle('rerun');
-                updateSummaryForTab('rerun');
                 return;
             }
             tableBody.querySelectorAll('tr[data-selection-key]').forEach(applySelectionState);
@@ -3582,6 +4047,104 @@
             void badge.offsetWidth; // restart the animation
             badge.classList.add('count-flash');
         }
+
+        // ---- Rerun list file (sidecar) -----------------------------------------
+        // The list only otherwise lives in this browser's localStorage. This
+        // file holds just the recommendations, linked to experiments by
+        // selection key (experiment id, or "id::variation" for a comparison), so
+        // it only means something next to the dataset it was made from.
+        const RERUN_FILE_FORMAT = 'rerun-recommendations';
+
+        function exportRerunList() {
+            commitOpenNotesField();
+            const reruns = rerunInstances.map(({ id, key }) => {
+                const { tags, ...record } = detailFor(id);
+                const experiment = experimentForSelectionKey(key.split('::')[0]);
+                return {
+                    id,
+                    experimentKey: key,
+                    // Informational only, so the file is readable on its own;
+                    // import matches on experimentKey.
+                    experimentName: experiment?.name,
+                    ...record,
+                    tags: tags ? Array.from(tags) : undefined
+                };
+            });
+            const payload = {
+                format: RERUN_FILE_FORMAT,
+                version: 1,
+                exportedAt: new Date().toISOString(),
+                reruns
+            };
+            const blob = new Blob([JSON.stringify(payload, null, 2) + '\n'], { type: 'application/json' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `reruns-${new Date().toISOString().slice(0, 10)}.json`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(link.href);
+        }
+
+        // Adds the file's entries to the current list. Entries whose experiment
+        // isn't in the loaded data are skipped (the list prunes those anyway),
+        // and entries already on the list (same id) aren't added twice.
+        function importRerunList(text) {
+            let payload;
+            try {
+                payload = JSON.parse(text);
+            } catch (error) {
+                alert('Could not parse that file as JSON: ' + error.message);
+                return;
+            }
+            if (payload?.format !== RERUN_FILE_FORMAT || !Array.isArray(payload.reruns)) {
+                alert('That file is not a rerun list export.');
+                return;
+            }
+
+            const datasetKeys = new Set(view.rows.map(viewRow => viewRow.selectionKey).filter(Boolean));
+            const existingIds = new Set(rerunInstances.map(inst => inst.id));
+            // Group ids are only unique within one session's list, so remap them
+            // to keep imported compounds from merging into existing ones.
+            const groupIds = new Map();
+            let added = 0, duplicate = 0, missing = 0;
+
+            payload.reruns.forEach(({ id, experimentKey, experimentName, tags, compoundGroup, ...record }) => {
+                if (!experimentKey || !datasetKeys.has(experimentKey)) { missing++; return; }
+                if (id && existingIds.has(id)) { duplicate++; return; }
+                const instanceId = id || newRerunInstanceId();
+                if (compoundGroup && !groupIds.has(compoundGroup)) {
+                    groupIds.set(compoundGroup, 'cg' + (compoundGroupCounter++));
+                }
+                rerunInstances.push({ id: instanceId, key: experimentKey });
+                updateDetail(instanceId, {
+                    ...record,
+                    compoundGroup: compoundGroup ? groupIds.get(compoundGroup) : undefined,
+                    tags: Array.isArray(tags) ? new Set(tags) : undefined
+                });
+                existingIds.add(instanceId);
+                added++;
+            });
+
+            if (added) {
+                afterRerunStateChange();
+                flashRerunTab();
+            }
+            const notes = [];
+            if (duplicate) notes.push(`${duplicate} already on the list`);
+            if (missing) notes.push(`${missing} for experiments not in the loaded data`);
+            alert(`Added ${added} rerun${added === 1 ? '' : 's'}.` + (notes.length ? `\nSkipped ${notes.join(', ')}.` : ''));
+        }
+
+        document.getElementById('rerunExportBtn').addEventListener('click', exportRerunList);
+        const rerunImportInput = document.getElementById('rerunImportInput');
+        document.getElementById('rerunImportBtn').addEventListener('click', () => rerunImportInput.click());
+        rerunImportInput.addEventListener('change', () => {
+            const file = rerunImportInput.files[0];
+            if (!file) return;
+            file.text().then(importRerunList);
+            rerunImportInput.value = '';
+        });
 
         function attachCheckboxListeners() {
             document.querySelectorAll('.rerun-row-btn').forEach(btn => {
@@ -3839,12 +4402,49 @@
             return el('div', { class: 'rerun-panel-actions' }, [rerunBtn, compoundBtn]);
         }
 
+        // Entry keys whose reference section (original change + screenshots)
+        // was flipped from its default: open for a draft, where it informs the
+        // decision being made, collapsed for an entry already on the list,
+        // where a column of tall screenshots would bury the list. Session-only,
+        // like open drafts.
+        const referenceToggled = new Set();
+
+        function isReferenceOpen(entryKey, state) {
+            const defaultOpen = !state.instanceId;
+            return referenceToggled.has(entryKey) ? !defaultOpen : defaultOpen;
+        }
+
+        function buildReferenceToggle(entryKey, open, change, shotCount) {
+            const parts = [
+                change ? 'original change' : null,
+                shotCount ? `${shotCount} screenshot${shotCount === 1 ? '' : 's'}` : null
+            ].filter(Boolean).join(' & ');
+            return el('button', {
+                type: 'button',
+                class: 'rerun-reference-toggle' + (open ? ' is-open' : ''),
+                textContent: `${open ? 'Hide' : 'Show'} ${parts}`,
+                'aria-expanded': String(open),
+                dataset: { entryKey }
+            });
+        }
+
+        tableBody.addEventListener('click', function(e) {
+            const btn = e.target.closest('.rerun-reference-toggle');
+            if (!btn) return;
+            e.stopPropagation();
+            commitOpenNotesField();
+            const key = btn.dataset.entryKey;
+            if (referenceToggled.has(key)) referenceToggled.delete(key);
+            else referenceToggled.add(key);
+            syncRerunNoteRows();
+        });
+
         // Each open draft, and each entry on the Rerun tab, carries its tag row
         // and notes panel under its row. Both are rebuilt from scratch on each
         // sync: they are presentation only -- their values live in rerunDetails
         // -- so there is nothing in them worth preserving across a refresh.
         function syncRerunNoteRows() {
-            document.querySelectorAll('.rerun-note-row, .rerun-tag-row').forEach(el => el.remove());
+            document.querySelectorAll('.rerun-note-row, .rerun-tag-row, .rerun-screenshot-row').forEach(el => el.remove());
 
             const colspan = tableColumnCount();
             document.querySelectorAll('#tableBody tr[data-selection-key]')
@@ -3865,20 +4465,42 @@
                         dataset: { entryKey }
                     });
 
+                    const item = itemForSelectionKey(row.dataset.selectionKey);
+                    // The full change text: the row itself clamps it to two lines.
+                    const change = item?.change;
+                    const shotCount = item?.screenshots?.length || 0;
+                    const hasReference = Boolean(change || shotCount);
+                    const referenceOpen = hasReference && isReferenceOpen(entryKey, state);
+                    const screenshotRow = referenceOpen
+                        ? buildRerunScreenshotRow(row.dataset.selectionKey, isSubRow)
+                        : null;
+
                     // Stacked top to bottom: test type, then notes, then the
                     // panel's action -- reads like a short form rather than a
-                    // row of side-by-side controls.
+                    // row of side-by-side controls. Below a divider, reference
+                    // material (the original change, then screenshots) behind
+                    // its own show/hide toggle, since it can be very tall.
                     const noteRow = el('tr', { class: 'rerun-note-row' + (isSubRow ? ' sub-row-note' : '') },
                         el('td', { colSpan: colspan },
                             el('div', { class: 'rerun-note-layout' }, [
                                 buildRerunTypePicker(entryKey),
                                 field,
-                                buildRerunPanelAction(row, state)
-                            ])));
+                                buildRerunPanelAction(row, state),
+                                hasReference ? el('hr', { class: 'rerun-panel-divider' }) : null,
+                                hasReference ? buildReferenceToggle(entryKey, referenceOpen, change, shotCount) : null,
+                                referenceOpen && change ? el('div', { class: 'rerun-change-full' }, [
+                                    el('div', { class: 'rerun-type-label', textContent: 'Original change' }),
+                                    el('p', { class: 'rerun-change-full-text', textContent: change })
+                                ]) : null
+                            ].filter(Boolean))));
 
-                    // Tags first, then the notes field, both under their row.
+                    // Tags, then notes (which carries the Rerun button), then
+                    // screenshots (when the data source has any) last -- below
+                    // the action that would close the panel, like supporting
+                    // material rather than something to act on first.
                     row.after(buildRerunTagRow(entryKey, isSubRow));
                     row.nextElementSibling.after(noteRow);
+                    if (screenshotRow) noteRow.after(screenshotRow);
                     // Size to the text it already holds, now that it is in the
                     // document and has a width to wrap against.
                     autoGrowNotesField(field);
@@ -3995,11 +4617,12 @@
         // Move focus into the notes field belonging to a row, if it has one.
         function focusNotesFieldFor(row) {
             if (!row) return;
-            // The tag row sits between a row and its notes field, so walk the
-            // siblings that belong to this row rather than assuming the next one.
+            // The screenshot/tag rows sit between a row and its notes field,
+            // so walk the siblings that belong to this row rather than
+            // assuming the next one.
             let el = row.nextElementSibling;
             let field = null;
-            while (el && (el.classList.contains('rerun-tag-row') || el.classList.contains('rerun-note-row'))) {
+            while (el && (el.classList.contains('rerun-tag-row') || el.classList.contains('rerun-note-row') || el.classList.contains('rerun-screenshot-row'))) {
                 field = el.querySelector('.rerun-note-field') || field;
                 el = el.nextElementSibling;
             }
@@ -4055,39 +4678,6 @@
 
         function getActiveTabType() {
             return document.querySelector('.tab.active')?.dataset.tab || 'almost-significant';
-        }
-
-        // Each listed test once, however many entries it has, so a test added
-        // twice doesn't count twice in the summary stats.
-        function selectedRerunExperiments() {
-            const selected = [];
-            const listedKeys = new Set(rerunInstances.map(inst => inst.key));
-
-            calculatedExperimentsData.forEach(experiment => {
-                if (listedKeys.has(experimentSelectionKey(experiment))) {
-                    selected.push(experiment);
-                }
-
-                if (!Array.isArray(experiment.additionalComparisons)) return;
-
-                experiment.additionalComparisons.forEach(comparison => {
-                    if (!listedKeys.has(comparisonSelectionKey(experiment, comparison))) return;
-                    selected.push({
-                        ...comparison,
-                        id: comparisonSelectionKey(experiment, comparison),
-                        name: `${experiment.name || 'Untitled'} vs. ${comparison.variationName || 'variation'}`,
-                        iterations: experiment.iterations || 0
-                    });
-                });
-            });
-
-            return selected;
-        }
-
-        function updateSummaryForTab(tabType = getActiveTabType()) {
-            updateSummaryBar(tabType === 'rerun'
-                ? selectedRerunExperiments()
-                : calculatedExperimentsData);
         }
 
         // Search and tab filtering now happen in the data pipeline, so making a
@@ -4211,7 +4801,9 @@
 
             renderView(tabType);
             updateTitle(tabType);
-            updateSummaryForTab(tabType);
+            // The summary always describes the whole dataset, whichever tab is
+            // active -- including Rerun, which only lists a hand-picked subset.
+            updateSummaryBar(calculatedExperimentsData);
 
             // Refresh the floating highlight navigator for the new highlight set
             updateHighlightNav();
@@ -4228,7 +4820,7 @@
         }
 
         function getVisibleTableRows() {
-            return Array.from(document.querySelectorAll('#tableBody tr:not(.rerun-note-row):not(.rerun-tag-row)'))
+            return Array.from(document.querySelectorAll('#tableBody tr:not(.rerun-note-row):not(.rerun-tag-row):not(.rerun-screenshot-row)'))
                 .filter(row => row.style.display !== 'none');
         }
 
@@ -4337,16 +4929,18 @@
 
         document.getElementById('highlightPrev').addEventListener('click', () => jumpToHighlight(-1));
         document.getElementById('highlightNext').addEventListener('click', () => jumpToHighlight(1));
-        // A click anywhere in an expanded panel (the tag row, the notes row --
-        // both separate <tr>s injected right after the data row, not inside
-        // it) belongs to the data row just above that run of panel rows, the
-        // same row focusNotesFieldFor walks forward from. Returns the click's
-        // own row unchanged if it isn't on a panel row at all.
+        // A click anywhere in an expanded panel (the screenshot row, the tag
+        // row, the notes row -- all separate <tr>s injected right after the
+        // data row, not inside it) belongs to the data row just above that
+        // run of panel rows, the same row focusNotesFieldFor walks forward
+        // from. Returns the click's own row unchanged if it isn't on a panel
+        // row at all.
         function ownerRowFor(row) {
             if (!row) return row;
-            if (!row.classList.contains('rerun-tag-row') && !row.classList.contains('rerun-note-row')) return row;
+            const isPanelRow = cls => row.classList.contains(cls);
+            if (!isPanelRow('rerun-tag-row') && !isPanelRow('rerun-note-row') && !isPanelRow('rerun-screenshot-row')) return row;
             let el = row.previousElementSibling;
-            while (el && (el.classList.contains('rerun-tag-row') || el.classList.contains('rerun-note-row'))) {
+            while (el && (el.classList.contains('rerun-tag-row') || el.classList.contains('rerun-note-row') || el.classList.contains('rerun-screenshot-row'))) {
                 el = el.previousElementSibling;
             }
             return el;
@@ -4359,7 +4953,7 @@
         function rowClickTogglesDraft(e) {
             const row = ownerRowFor(e.target.closest('tr'));
             if (!row || !row.classList.contains('row-draftable')) return null;
-            if (e.target.closest('a, button, input, select, textarea, label, [role="link"], .row-action-menu')) return null;
+            if (e.target.closest('a, button, input, select, textarea, label, [role="link"], .row-action-menu, .rerun-screenshot-thumb')) return null;
             if (String(window.getSelection?.() || '')) return null;
             return row;
         }
@@ -4375,7 +4969,7 @@
             if (getActiveTabType() !== 'rerun') return null;
             const row = ownerRowFor(e.target.closest('tr'));
             if (!row || !row.dataset.instanceId) return null;
-            if (e.target.closest('a, button, input, select, textarea, label, [role="link"], .row-action-menu')) return null;
+            if (e.target.closest('a, button, input, select, textarea, label, [role="link"], .row-action-menu, .rerun-screenshot-thumb')) return null;
             if (String(window.getSelection?.() || '')) return null;
             return row;
         }
@@ -4410,7 +5004,7 @@
         // Every element updateSummaryBar() writes, so clearing them is one list.
         const SUMMARY_FIELDS = [
             'sensitivityThresholds', 'successRateValue', 'successRateIterValue',
-            'fprValue', 'medianEffectValue', 'medianEffectIterValue'
+            'fprValue', 'medianEffectValue', 'medianEffectIterValue', 'medianMdeAt80Value'
         ];
 
         // Writes one summary figure and its colour band. `bands` is read in order
@@ -4428,8 +5022,12 @@
 
         function updateSummaryBar(allExperiments = calculatedExperimentsData) {
             const MDE_THRESHOLDS = [0.5, 1, 2, 5, 10, 15];
-            const ALPHA = 0.05;
+            const ALPHA = getSelectedAlpha();
             const POWER_THRESHOLD = 80;
+            // Ceiling for the MDE-at-80%-power search: an experiment that still
+            // can't reach 80% power even at a 200% relative effect is reported
+            // as unresolved (null) rather than pinned to an arbitrary number.
+            const MDE_SEARCH_MAX = 200;
             // Only experiments with a measured effect count. One without results
             // (e.g. an import whose platform had no analysis for it yet) can
             // never be a success and has no sample size, so leaving it in would
@@ -4452,6 +5050,29 @@
                 const power = recalculatePower(exp.sampleSize, exp.primaryMetricType, mde, exp.baseRate || 5);
                 return power !== null && power >= POWER_THRESHOLD;
             }).length / total;
+
+            // The MDE this one experiment's own sample size is actually
+            // sensitive to at 80% power -- the threshold sweep's per-column
+            // question turned around to "what effect could THIS test have
+            // caught?" Power rises monotonically with MDE, so a binary
+            // search inverts recalculatePower without needing a closed form.
+            function mdeAt80Power(exp) {
+                const power = mde => recalculatePower(exp.sampleSize, exp.primaryMetricType, mde, exp.baseRate || 5);
+                if (power(MDE_SEARCH_MAX) < POWER_THRESHOLD) return null; // not even reached at the search ceiling
+                let lo = 0, hi = MDE_SEARCH_MAX;
+                for (let i = 0; i < 30; i++) {
+                    const mid = (lo + hi) / 2;
+                    if ((power(mid) ?? 0) >= POWER_THRESHOLD) hi = mid; else lo = mid;
+                }
+                return hi;
+            }
+
+            function median(values) {
+                if (!values.length) return null;
+                const sorted = values.slice().sort((a, b) => a - b);
+                const mid = Math.floor(sorted.length / 2);
+                return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+            }
             // Drive the uniform color off the custom MDE input: the whole histogram
             // reflects coverage at the user's chosen MDE (low → red, high → green).
             const selectedMde = getSelectedMde();
@@ -4476,8 +5097,11 @@
                 // share the uniform coverage color.
                 const isZero = pctRaw < 0.05;
                 const bg = isSelected ? '#333' : (isZero ? '#d0d0d0' : uniformColor);
-                // Bar height encodes the % (min 3px so 0% is still a visible sliver)
-                const barHeight = Math.max(3, Math.round(pctRaw / 100 * 44));
+                // Bar height encodes the % (min 3px so 0% is still a visible sliver).
+                // Capped shorter than the panel's own content height so the
+                // percentage row above it doesn't drift far from the other
+                // panels' headline-number baseline (see .summary-threshold-bararea).
+                const barHeight = Math.max(3, Math.round(pctRaw / 100 * 24));
                 // Dim the % number and MDE tick for zero columns; dark for real values
                 const pctColor = isZero ? '#c0c0c0' : '#2c2c2c';
                 const mdeColor = isZero ? '#c0c0c0' : '#2c2c2c';
@@ -4489,6 +5113,19 @@
                     <span class="summary-threshold-label" style="color:${mdeColor}">${mdeLabel}</span>
                 </span>`;
             }).join('');
+
+            const mdeAt80Values = experiments.map(mdeAt80Power).filter(v => v !== null);
+            const medianMdeAt80 = median(mdeAt80Values);
+            if (medianMdeAt80 === null) {
+                writeSummaryStat('medianMdeAt80Value', '—', { className: 'summary-metric-value summary-metric-empty' });
+            } else {
+                writeSummaryStat('medianMdeAt80Value',
+                    `${medianMdeAt80 < 10 ? medianMdeAt80.toFixed(1) : Math.round(medianMdeAt80)}%`, {
+                        // Lower is better: up to 5% green, up to 15% orange, above red.
+                        bands: [[medianMdeAt80 > 15, 'metric-danger'], [medianMdeAt80 > 5, 'metric-warning'],
+                                [true, 'metric-good']]
+                    });
+            }
 
             const isSuccess = exp => exp.primaryMetric > 0 && exp.pvalue !== null && exp.pvalue < ALPHA;
             // A test counts as an iteration only if it's tagged with iterations >= 1.
@@ -4502,12 +5139,12 @@
 
             const renderSuccessRate = (elId, exps) => {
                 if (exps.length === 0) {
-                    writeSummaryStat(elId, null);
+                    writeSummaryStat(elId, '—', { className: 'summary-metric-value summary-metric-empty' });
                     return;
                 }
                 const rate = Math.round((exps.filter(isSuccess).length / exps.length) * 100);
                 writeSummaryStat(elId, rate + '%', {
-                    bands: [[rate >= 33, 'metric-good'], [rate >= 15, 'metric-warning']]
+                    bands: [[rate >= 20, 'metric-good'], [rate >= 10, 'metric-warning'], [true, 'metric-danger']]
                 });
             };
             renderSuccessRate('successRateValue', firstTimeExperiments);
@@ -4519,20 +5156,34 @@
             //     π = (winRate - α⁺) / (power - α⁺)
             // Power is assumed at 80% as in the paper. Power at the selected MDE isn't the power
             // against the tests' real effects, and made π (and FPR) swing with the MDE input.
-            const ASSUMED_POWER = 0.8;
-            const overallSuccessCount = experiments.filter(isSuccess).length;
-            const winRate = overallSuccessCount / total;
-            const alphaPos = ALPHA / 2;
-            if (overallSuccessCount === 0) {
-                writeSummaryStat('fprValue', null);
+            //
+            // Not shown under sequential (mSPRT): the formula's α and "power" are
+            // fixed-horizon frequentist quantities (a one-shot test's false-positive
+            // rate and its power at a pre-set N). isSuccess() reads exp.pvalue, which
+            // under sequential mode is the always-valid p-value -- a different
+            // statistic with no established version of this same formula, not just
+            // the same number plugged into a formula that still happens to apply.
+            const fprPanel = document.getElementById('fprPanel');
+            if (getPowerMethod() === 'sequential') {
+                writeSummaryStat('fprValue', '—', { className: 'summary-metric-value summary-metric-empty' });
+                if (fprPanel) fprPanel.dataset.tip = 'Not shown under sequential (mSPRT): this formula assumes fixed-horizon α and power, which don’t have an established always-valid equivalent.';
             } else {
-                const pi = Math.min(1, Math.max(0, (winRate - alphaPos) / (ASSUMED_POWER - alphaPos)));
-                const fpr = (alphaPos * (1 - pi)) / (alphaPos * (1 - pi) + ASSUMED_POWER * pi);
-                const fprPct = Math.round(fpr * 100);
-                writeSummaryStat('fprValue', fprPct + '%', {
-                    bands: [[fprPct <= 20, 'metric-good'], [fprPct <= 50, 'metric-warning'],
-                            [true, 'metric-danger']]
-                });
+                if (fprPanel) delete fprPanel.dataset.tip;
+                const ASSUMED_POWER = 0.8;
+                const overallSuccessCount = experiments.filter(isSuccess).length;
+                const winRate = overallSuccessCount / total;
+                const alphaPos = ALPHA / 2;
+                if (overallSuccessCount === 0) {
+                    writeSummaryStat('fprValue', null);
+                } else {
+                    const pi = Math.min(1, Math.max(0, (winRate - alphaPos) / (ASSUMED_POWER - alphaPos)));
+                    const fpr = (alphaPos * (1 - pi)) / (alphaPos * (1 - pi) + ASSUMED_POWER * pi);
+                    const fprPct = Math.round(fpr * 100);
+                    writeSummaryStat('fprValue', fprPct + '%', {
+                        bands: [[fprPct <= 20, 'metric-good'], [fprPct <= 50, 'metric-warning'],
+                                [true, 'metric-danger']]
+                    });
+                }
             }
 
             // 4. Median Relative Effect — shown inside each Success Rate panel
@@ -4551,9 +5202,7 @@
                     ? effects[mid]
                     : (effects[mid - 1] + effects[mid]) / 2;
                 writeSummaryStat(elId, (median > 0 ? '+' : '') + median.toFixed(1) + '%', {
-                    className: MEDIAN_CLASS,
-                    bands: [[median > 0, 'metric-good'], [median < -1, 'metric-danger'],
-                            [true, 'metric-warning']]
+                    className: MEDIAN_CLASS
                 });
             };
             renderMedian('medianEffectValue', firstTimeExperiments);
@@ -4679,6 +5328,7 @@
                 // of their own yet.
                 const placeholderTabs = ['segments', 'patterns', 'custom'];
                 document.getElementById('placeholderPanel').classList.toggle('visible', placeholderTabs.includes(tabType));
+                document.getElementById('rerunActionsPanel').classList.toggle('visible', tabType === 'rerun');
 
                 // Render the editable parameter panel for this tab
                 renderTabParamsPanel(tabType);
@@ -4762,15 +5412,39 @@
         initTooltips();
         initCompoundGroupBarResync();
 
-        // MDE / Base rate inputs: recalculate on change
+        // MDE / alpha / power method: recalculate and persist on change, same
+        // as the active tab, so a reload picks up where you left off instead
+        // of always resetting to fixed-horizon / 2% / 0.05.
         function onStatsInputChange() {
+            writeStored(MDE_KEY, mdeInput.value);
+            writeStored(ALPHA_KEY, alphaInput.value);
             refreshUI(experimentsData);
         }
 
         const mdeInput = document.getElementById('mdeInput');
+        const savedMde = readStored(MDE_KEY);
+        if (savedMde !== null) mdeInput.value = savedMde;
         mdeInput.addEventListener('blur', onStatsInputChange);
         mdeInput.addEventListener('keydown', function(e) {
             if (e.key === 'Enter') this.blur();
+        });
+
+        const alphaInput = document.getElementById('alphaInput');
+        const savedAlpha = readStored(ALPHA_KEY);
+        if (savedAlpha !== null) alphaInput.value = savedAlpha;
+        alphaInput.addEventListener('blur', onStatsInputChange);
+        alphaInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') this.blur();
+        });
+
+        const powerMethodSelect = document.getElementById('powerMethodSelect');
+        const savedPowerMethod = readStored(POWER_METHOD_KEY);
+        if (savedPowerMethod === 'fixed' || savedPowerMethod === 'sequential') {
+            powerMethodSelect.value = savedPowerMethod;
+        }
+        powerMethodSelect.addEventListener('change', function() {
+            writeStored(POWER_METHOD_KEY, this.value);
+            onStatsInputChange();
         });
 
         // Search functionality

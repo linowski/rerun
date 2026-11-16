@@ -4,7 +4,6 @@
     --surface: #ffffff;
     --surface-page: #f2f4f7;
     --surface-soft: #f9f9f9;
-    --surface-header: #fafafa;
     --surface-control: #f0f0f0;
     --hover-blue: #e3f2fd;
     /* Translucent white over a blue row: fields stay legible without cutting a
@@ -29,7 +28,6 @@
     --highlight-text: #1f1f1f;
     --highlight-bg: #fff3cd;
     --panel-border: rgba(20, 30, 45, 0.06);
-    --panel-shadow: 0 2px 6px rgba(20, 30, 45, 0.06);
 }
 
 * {
@@ -66,18 +64,27 @@ body {
     justify-content: space-between;
     align-items: flex-start;
     gap: 24px;
-    margin-bottom: 20px;
+    margin-bottom: 12px;
 }
 
+/* A fixed two-row grid beside the title -- stats inputs + search, then the
+   data source toggle -- sized by the controls alone, so a tab's longer or
+   shorter heading never re-wraps or shifts them. Below the breakpoint where
+   the widest heading and this grid stop fitting side by side, the header
+   stacks instead (see the max-width: 1580px query). */
 .header-controls {
-    display: flex;
+    display: grid;
+    grid-template-columns: auto auto;
     align-items: center;
-    justify-content: flex-end;
-    flex-wrap: wrap;
     gap: 12px;
-    flex-shrink: 0;
+    flex: 0 0 auto;
     /* optically centre the controls on the h1's line rather than its box top */
     padding-top: 6px;
+}
+
+.header-controls .data-source-toggle-external {
+    grid-column: 1 / -1;
+    justify-self: end;
 }
 
 
@@ -110,12 +117,17 @@ h1 {
     font-size: 18px;
     font-weight: 400;
     color: var(--text-muted);
+    white-space: nowrap;
 }
 
 .mde-input-group {
     display: flex;
     align-items: center;
     gap: 4px;
+}
+
+.mde-label-spaced {
+    margin-left: 12px;
 }
 
 .mde-label {
@@ -131,7 +143,8 @@ h1 {
 .search-box,
 .form-input,
 .tab-param-input,
-.tab-param-select {
+.tab-param-select,
+.power-method-select {
     padding: 8px 10px;
     border: 1px solid #ccc;
     border-radius: 4px;
@@ -145,9 +158,21 @@ h1 {
 .search-box:focus,
 .form-input:focus,
 .tab-param-input:focus,
-.tab-param-select:focus {
+.tab-param-select:focus,
+.power-method-select:focus {
     outline: none;
     border-color: var(--accent);
+}
+
+.power-method-select {
+    padding: 8px 24px 8px 10px;
+    color: var(--text-strong);
+    background-color: var(--surface);
+    cursor: pointer;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath fill='%232c2c2c' d='M1 1l5 5 5-5'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    background-size: 10px 7px;
 }
 
 .mde-input {
@@ -169,7 +194,6 @@ h1 {
 .data-source-toggle-external .toggle-label {
     display: flex;
     align-items: center;
-    gap: 8px;
     cursor: pointer;
     user-select: none;
 }
@@ -180,7 +204,12 @@ h1 {
     font-weight: 500;
 }
 
+.data-source-toggle-external .toggle-text:first-of-type {
+    margin-right: 8px;
+}
+
 .data-source-toggle-external .toggle-text:last-of-type {
+    margin-left: 4px;
     padding: 4px 10px;
     border-radius: 12px;
     border: 1px solid transparent;
@@ -225,7 +254,9 @@ h1 {
 }
 
 .data-source-toggle-external .toggle-checkbox:checked ~ .toggle-text:last-of-type {
-    color: var(--accent);
+    background-color: var(--text-strong);
+    border-color: var(--text-strong);
+    color: var(--surface);
     font-weight: 600;
 }
 
@@ -311,10 +342,15 @@ h1 {
    bridge it shares with the table below, so the black line sits at the tab's
    own top edge instead of cutting across that shared join. Black rather than
    blue -- blue stays reserved for clickable affordances (like the hover state
-   above), black marks "this is the selected one". */
+   above), black marks "this is the selected one". Top corners only: this is
+   the top of the white stack that continues through .tab-bridge into
+   .table-container below, so only the very top of that stack curves -- not
+   the tab's own bottom edge, which butts flush against the bridge. */
 .tab.active {
     color: var(--text-strong);
     border-top-color: var(--text-strong);
+    background-color: var(--surface);
+    border-radius: 8px 8px 0 0;
 }
 
 .tab-icon {
@@ -361,6 +397,18 @@ h1 {
     position: relative;
     display: inline-flex;
     flex: 0 0 auto;
+}
+
+/* Scenario tabs only: pushes the icon+label set down within the tab. */
+.tab-icon-wrap {
+    margin-top: 10px;
+}
+
+/* Rerun tab only: raised relative to the scenario tabs' own icons, which
+   sit lower (see .tab-icon-wrap's margin-top above) -- the Rerun tab keeps
+   its own blue-box treatment and isn't meant to track that adjustment. */
+.rerun-icon-wrap {
+    margin-top: -5px;
 }
 
 /* Scenario tabs: how many rows the tab's rule currently matches. Amber ties
@@ -427,19 +475,6 @@ h1 {
    continuing down through .tab-bridge with no seam, so the selected tab
    visually anchors to the data it controls rather than floating on the grey
    page background like the others. */
-/* No radius of its own: .tabs-container already rounds its top corners, and
-   since both it and the active tab are the same white, a second, smaller
-   radius on the tab just carves a visible notch where the two curves meet
-   instead of one clean corner. */
-/* Top corners only: this is the top of the white stack that continues through
-   .tab-bridge into .table-container below, so only the very top of that
-   stack should curve -- not this tab's own bottom edge, which butts flush
-   against the bridge beneath it. */
-.tab.active {
-    background-color: var(--surface);
-    border-radius: 8px 8px 0 0;
-}
-
 /* White bridge from the active tab to the table. Always present -- unlike the
    rule panels it wraps, which show only for tabs with an editable rule -- so a
    tab with nothing to show (Rerun, Segments, Patterns) still carries the
@@ -543,7 +578,9 @@ h1 {
     overflow-x: auto;
     overflow-y: hidden;
     background-color: var(--surface);
-    border: 1px solid var(--panel-border);
+    /* Top and bottom edges only: side borders boxed in the header strip. */
+    border-top: 1px solid var(--panel-border);
+    border-bottom: 1px solid var(--panel-border);
     /* Lives here, not on .pagination-controls, so the bottom of the page
        reads the same whether or not that control happens to be visible --
        it's display:none below one page of rows (the Rerun tab, usually),
@@ -553,7 +590,6 @@ h1 {
        continuing the same white surface from the active tab above, so only
        the outer bottom of the whole stack curves. */
     border-radius: 0 0 8px 8px;
-    box-shadow: var(--panel-shadow);
     -webkit-overflow-scrolling: touch;
 }
 
@@ -565,9 +601,6 @@ h1 {
 table {
     border-radius: 0 0 8px 8px;
     overflow: hidden;
-}
-
-table {
     width: 100%;
     min-width: 1400px;
     table-layout: fixed;
@@ -666,7 +699,7 @@ tbody tr {
    A visible rule, not the old page-coloured band: at 1px in --row-divider it
    reads clearly against white while staying quieter than the cell fills, so
    structure is legible without competing with the data. */
-tbody tr:not(:first-child):not(.sub-row):not(.rerun-note-row):not(.rerun-tag-row) {
+tbody tr:not(:first-child):not(.sub-row):not(.rerun-note-row):not(.rerun-tag-row):not(.rerun-screenshot-row) {
     border-top: 1px solid var(--row-divider);
 }
 
@@ -681,7 +714,8 @@ tbody tr.checkbox-selected > td {
 }
 
 tbody tr.rerun-note-row > td,
-tbody tr.rerun-tag-row > td {
+tbody tr.rerun-tag-row > td,
+tbody tr.rerun-screenshot-row > td {
     border-top: 0;
 }
 
@@ -856,18 +890,26 @@ tr.row-flash {
     gap: 1px;
 }
 
+/* Plain text, not a solid pill -- red color alone marks it as worth a
+   second look, same weight/size as a normal sample size so this column
+   doesn't visually compete with the Power column's own badge. */
 .sample-size-alert {
-    display: inline-block;
-    padding: 3px 7px;
-    border-radius: 4px;
+    color: #dc3545;
     font-weight: 700;
-    color: var(--surface);
-    background-color: #dc3545;
 }
 
 .sample-size-stat-label {
     font-size: 11px;
-    color: var(--text-strong);
+    color: #dc3545;
+    white-space: nowrap;
+}
+
+/* Average daily sample rate, same two-line shape as the prereg alert label
+   and the Power column's MDE label, but neutral -- no threshold to flag
+   against yet, just the pace for eyeballing against a rerun decision. */
+.sample-size-rate {
+    font-size: 11px;
+    color: var(--text-subtle);
     white-space: nowrap;
 }
 
@@ -1049,6 +1091,19 @@ th.col-power {
     align-items: flex-start;
 }
 
+/* Sequential (mSPRT) mode: no fixed sample size, so "power at this N"
+   isn't a meaningful number -- the decision signal lives on the P-val
+   badge instead (see pvalueCell). Muted placeholder rather than an empty
+   cell, so the column's absence reads as intentional. */
+/* Sequential mode's power is an approximation: a small, dimmed "≈" ahead of
+   the number, the same treatment as the "<" in a "< 0.001" p-value. */
+.power-approx {
+    font-size: 0.75em;
+    font-weight: 400;
+    opacity: 0.8;
+    margin-right: 1px;
+}
+
 /* Fixed width so the power badge stays aligned regardless of digits */
 .power-col {
     display: flex;
@@ -1179,6 +1234,16 @@ tbody td:has(> .experiment-name-container) {
     gap: 6px;
 }
 
+/* An open row's stack gains the origin badge and the compound checkbox, which
+   would make it taller than the name beside it and grow the row (stretching
+   the highlighted metric boxes with it). Held at the collapsed stack's height
+   instead -- rerun button + gap + overflow button -- so the extras hang into
+   the open panel's empty left gutter directly below. Positioned (above), so
+   they paint over that next row rather than under it. */
+tr.checkbox-selected .row-controls {
+    height: calc(32px + 6px + 26px);
+}
+
 /* "Select for Rerun as Compound" -- only meaningful, and only shown, once a
    row is drafting or already listed (the row carries .checkbox-selected
    then); a collapsed row has nothing open to compound with anything else. No
@@ -1268,8 +1333,9 @@ tr.checkbox-selected .rerun-compound-check {
 }
 
 /* --- Row action menu -------------------------------------------------------
-   Anchored to the overflow button it was opened from. The name cell is the
-   positioning context, so the menu hangs just under the button's right edge. */
+   Anchored to the overflow button it was opened from: .row-controls (the
+   stack holding that button) is the positioning context, so the menu hangs
+   just under the stack. */
 .row-action-menu {
     position: absolute;
     top: calc(100% + 4px);
@@ -1284,11 +1350,6 @@ tr.checkbox-selected .rerun-compound-check {
     border: 1px solid var(--border);
     border-radius: 8px;
     box-shadow: 0 6px 20px rgba(0, 0, 0, 0.14);
-}
-
-/* Anchor for the absolutely positioned menu. */
-tbody td:has(> .experiment-name-container) {
-    position: relative;
 }
 
 .row-action-item {
@@ -1451,7 +1512,8 @@ td.col-secondary .metric-container {
     text-align: right;
 }
 
-/* Right-align the Secondary metric header to match its cells */
+/* Right-align the Metric/Secondary metric headers to match their cells */
+th.col-metric,
 th.col-secondary {
     text-align: right;
 }
@@ -1516,8 +1578,7 @@ th.col-secondary {
 }
 
 th.col-metric-p,
-th.col-secondary-p,
-.pvalue {
+th.col-secondary-p {
     padding-left: 4px;
 }
 
@@ -1525,14 +1586,48 @@ th.col-secondary-p,
     font-size: 12px;
     font-weight: 400;
     text-align: center;
+    /* Tighter than the table's default 16px td padding -- at 82px column
+       width, 16px on both sides would leave less room than the 58px pill
+       needs, pushing it off-center or out of the cell. */
+    padding-left: 8px;
+    padding-right: 8px;
+    white-space: nowrap;
 }
 
-.pvalue.pvalue-significant {
-    color: var(--text-strong);
+/* The p-value as a solid badge, same treatment as the Power column's badge:
+   background set inline via sensitivityColor(pvalueStrength(...)). */
+.pvalue-badge {
+    display: inline-block;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--surface);
+    border-radius: 4px;
+    padding: 3px 7px;
+    /* Fixed, not min -- "< 0.001" has more characters than a plain value
+       like "0.757", so a min-width alone still let it grow wider; a fixed
+       width (sized to fit "< 0.001" with equal padding on both sides, its
+       longest case) keeps every pill the same size regardless of content. */
+    width: 58px;
+    text-align: center;
+    box-sizing: border-box;
+    /* "< 0.001" must stay on one line -- a narrow column otherwise wraps
+       between the "<" and the number, breaking the badge's own shape. */
+    white-space: nowrap;
 }
 
-.pvalue.pvalue-not-significant {
-    color: var(--text-faint);
+/* The "<" in "< 0.001" is grammar, not the figure itself -- smaller and
+   lighter than the number so the number is what actually draws the eye. */
+.pvalue-lt {
+    font-size: 0.75em;
+    font-weight: 400;
+    opacity: 0.75;
+}
+
+/* "0.001" after a "<" is a display floor, not a measured value -- smaller
+   than a plain p-value's own full size, though still bigger than the "<"
+   itself since it's the more informative of the two. */
+.pvalue-lt-value {
+    font-size: 0.85em;
 }
 
 tr.highlighted-row {
@@ -1614,7 +1709,6 @@ tr.highlight-focus {
 }
 
 tr.highlighted-row .metric-label,
-tr.highlighted-row .pvalue,
 tr.highlighted-row .sample-size:not(.sample-size-alert),
 tr.highlighted-row .triggered {
     color: var(--highlight-text);
@@ -2027,6 +2121,57 @@ tr.sub-row.highlighted-row .sub-row-name {
     margin: 0 16px 24px 52px;
 }
 
+/* Thin rule between the panel's form (type, notes, Rerun) and the reference
+   material under it (original change, screenshots). Stretched across the
+   layout, since its column flex otherwise sizes children to their content. */
+.rerun-panel-divider {
+    align-self: stretch;
+    margin: 8px 0 4px;
+    border: none;
+    border-top: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+/* Show/hide link for the reference section under the divider. A text link
+   rather than a button: it reveals material, it doesn't act on the entry. */
+.rerun-reference-toggle {
+    padding: 0;
+    border: none;
+    background: none;
+    font: inherit;
+    font-size: 12px;
+    color: var(--accent);
+    cursor: pointer;
+}
+
+.rerun-reference-toggle::after {
+    content: '\25B8';
+    display: inline-block;
+    margin-left: 5px;
+    transition: transform 0.15s;
+}
+
+.rerun-reference-toggle.is-open::after {
+    transform: rotate(90deg);
+}
+
+.rerun-reference-toggle:hover {
+    text-decoration: underline;
+}
+
+.rerun-change-full {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-width: 720px;
+}
+
+.rerun-change-full-text {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--text-muted);
+}
+
 .rerun-note-field {
     display: block;
     align-self: stretch;
@@ -2070,7 +2215,11 @@ tr.sub-row.highlighted-row .sub-row-name {
     align-self: stretch;
 }
 
-.rerun-type-label {
+/* Small-caps labels across the rerun panel: Test type, Original change, and
+   the screenshot arm labels and preview captions. */
+.rerun-type-label,
+.rerun-screenshot-arm-label,
+.rerun-screenshot-preview-caption {
     font-size: 11px;
     font-weight: 600;
     letter-spacing: 0.02em;
@@ -2107,6 +2256,14 @@ tr.sub-row.highlighted-row .sub-row-name {
    ignores custom <option> colors, but font-weight reliably comes through. */
 .rerun-type-option-recommended {
     font-weight: 700;
+}
+
+/* Divider before the Decide options (a disabled option of box-drawing
+   characters -- see buildRerunTypePicker): light grey like the summary bar's
+   dividers. Option text colour is one of the few things the browser's own
+   dropdown list honours. */
+.rerun-type-divider {
+    color: var(--border);
 }
 
 .rerun-type-select:hover {
@@ -2193,6 +2350,136 @@ tr.sub-row.highlighted-row .sub-row-name {
     color: var(--text-muted);
 }
 
+/* Screenshots for the experiment's own arms (only present when the data
+   source provides them) -- below the panel's own action (the Rerun button),
+   like supporting material rather than something to act on first. Same blue
+   as the tag/note rows above it, so all three read as one panel rather than
+   separate bands. */
+.rerun-screenshot-row > td {
+    /* No left padding here -- .rerun-screenshot-layout's own margin-left
+       (52px, matching .rerun-note-layout) provides the indent, same as the
+       note row's td (padding: 0) does for its own content. */
+    padding: 4px 16px 14px 0;
+    background-color: var(--hover-blue);
+    border: 0;
+}
+
+/* Small thumbnails on the left, one column per arm so every shot for that
+   arm stays visible at a glance; a large always-on preview per arm fills
+   the rest of the row's width on the right (see .rerun-screenshot-preview-row) --
+   clicking a thumbnail swaps its arm's preview rather than covering
+   anything, so both stay visible side by side. Left-indented to 52px, same
+   as .rerun-note-layout below it, so the thumbnails line up under the row
+   icon/name instead of sitting flush against the table edge. */
+.rerun-screenshot-layout {
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+    margin-left: 52px;
+}
+
+.rerun-screenshot-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    flex: 0 0 auto;
+}
+
+.rerun-screenshot-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+/* Capped height with its own scroll: an arm with several states/viewports
+   (e.g. desktop + mobile + a sub-state) stacks rather than stretching the
+   row to fit its tallest group. Small and clickable, not meant to be read
+   at this size -- the large preview on the right is what's actually legible. */
+.rerun-screenshot-thumbs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    max-height: 420px;
+    overflow-y: auto;
+    width: 120px;
+}
+
+.rerun-screenshot-thumb {
+    height: 110px;
+    width: auto;
+    max-width: 100%;
+    object-fit: contain;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background-color: var(--surface);
+    cursor: pointer;
+}
+
+.rerun-screenshot-thumb.is-previewed {
+    border-color: var(--accent);
+    border-width: 2px;
+}
+
+/* One large preview per arm -- always visible (defaults to each arm's
+   first shot), side by side rather than stacked, so both arms compare
+   directly without clicking anything first. Columns split the row evenly
+   (flex: 1 1 0) so two desktop-width shots that can't both fit at native
+   size still sit side by side, each capped to its fair share; the FRAME
+   inside (not the column) then hugs its own image's actual width, so a
+   narrower mobile capture doesn't drag empty space along with it. */
+.rerun-screenshot-preview-row {
+    display: flex;
+    gap: 16px;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.rerun-screenshot-preview-col {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    flex: 1 1 0;
+    min-width: 0;
+}
+
+.rerun-screenshot-preview-caption {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.rerun-screenshot-preview-frame {
+    max-height: 720px;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background-color: var(--surface);
+    /* Hugs its own image's width (align-items: flex-start on the column
+       stops it stretching to the column's full flex-allocated share) --
+       capped at that share via max-width so a desktop shot too wide to
+       show at native size still fits its column rather than overflowing
+       into the next one. text-align centers a narrower image (mobile)
+       inside the frame once it's sized to something wider than the image
+       itself needs. Not flex: a flex row container with overflow-y:auto
+       and no fixed height badly miscomputes an auto-sized image's width
+       (a known flexbox auto-min-size/overflow quirk), collapsing it to a
+       fraction of its real size instead of just centering it. */
+    width: fit-content;
+    max-width: 100%;
+    text-align: center;
+}
+
+/* Never upscaled past its own resolution: a mobile capture (390px native)
+   would otherwise stretch to fill a desktop-width column and turn soft/
+   blurry. width: 100% filled the column at any size; auto + max-width
+   caps it at native size and only shrinks, never grows, past that. */
+.rerun-screenshot-preview-img {
+    display: inline-block;
+    width: auto;
+    max-width: 100%;
+    height: auto;
+}
+
 /* Read-only change-note strip under a Rerun-tab row: a full-width band that
    states what you meant to change, without opening the panel. */
 /* Belongs to the row above it: same blue, no rule between them, so a listed
@@ -2276,9 +2563,8 @@ tbody tr.rerun-note-row:hover > td {
     background-color: var(--surface);
     border: 1px solid var(--panel-border);
     border-radius: 8px;
-    box-shadow: var(--panel-shadow);
-    padding: 10px 18px;
-    margin-bottom: 16px;
+    padding: 10px 18px 14px;
+    margin-bottom: 24px;
 }
 
 .summary-panel {
@@ -2337,21 +2623,68 @@ tbody tr.rerun-note-row:hover > td {
     transform-origin: center;
 }
 
+/* Houses the threshold histogram and the median-MDE stat side by side, so
+   the "what % hit 80% power at MDE X" sweep and "what MDE would THIS set
+   of tests actually need" read as one comparison rather than two
+   disconnected numbers. */
+.summary-sensitivity-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 24px;
+}
+
 .summary-sensitivity-thresholds {
     display: flex;
     align-items: flex-end;
     gap: 10px;
-    /* One column's height (56px bar area + 16px label row), reserved even when
+    /* One column's height (32px bar area + 16px label row), reserved even when
        there is no data to chart, so the bar -- and the tabs below it -- don't
        jump when switching to a tab with nothing to summarise. */
-    min-height: 72px;
+    min-height: 48px;
+}
+
+/* Positioned to land its own number/caption at the exact same baseline as
+   the other three panels' (measured directly, since the histogram sibling's
+   bars give this row a different natural shape than a plain panel's) --
+   not derived from flex alignment against the histogram, which has no
+   reason to share a baseline with headline numbers elsewhere in the bar. */
+.summary-sensitivity-median {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding-left: 24px;
+    margin-top: 3px;
+    position: relative;
+    /* Sized to its own number+caption, not stretched to the row's full
+       height -- the histogram's bars make that height much taller than
+       this content needs, which read as an oddly long, thick rule next to
+       much shorter text. */
+    align-self: flex-start;
+}
+
+/* Inset from the top and bottom of .summary-sensitivity-median's own box,
+   rather than a full-height border flush with its edges -- a shorter rule
+   with breathing room above/below reads as a quiet separator instead of a
+   hard bracket around the content. */
+.summary-sensitivity-median::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 4px;
+    bottom: 4px;
+    width: 1px;
+    background-color: var(--border);
 }
 
 .summary-threshold-column {
     width: 40px;
     flex-shrink: 0;
     display: grid;
-    grid-template-rows: 56px 16px;
+    /* Must match .summary-threshold-bararea's own height -- this grid track
+       size wins over that rule when they disagree, which is what kept the
+       column tall even after the bararea height was reduced. */
+    grid-template-rows: 32px 16px;
     align-items: end;
     justify-items: center;
 }
@@ -2366,14 +2699,16 @@ tbody tr.rerun-note-row:hover > td {
 }
 
 /* Bottom-anchored bar area: number stacks directly on top of the bar and
-   rides up/down with it, so it always hugs where the bar ends. */
+   rides up/down with it, so it always hugs where the bar ends. Shorter
+   than before (was 56px) so the percentage row sits closer to the other
+   summary panels' headline-number baseline instead of trailing low. */
 .summary-threshold-bararea {
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: flex-end;
     width: 100%;
-    height: 56px;
+    height: 32px;
 }
 
 .summary-threshold-bar {
@@ -2404,6 +2739,13 @@ tbody tr.rerun-note-row:hover > td {
     min-height: 1.25em;
 }
 
+/* "No data" dash: thin and muted rather than a bold, heavy headline number --
+   it's a placeholder for the absence of a figure, not a figure itself. */
+.summary-metric-empty {
+    font-weight: 400;
+    color: var(--text-faint);
+}
+
 .summary-metric-value.metric-good,
 .summary-metric-median-value.metric-good {
     color: var(--success);
@@ -2424,7 +2766,11 @@ tbody tr.rerun-note-row:hover > td {
     font-size: 12px;
     font-weight: 500;
     color: #aaa;
-    margin-top: 2px;
+    /* Pulls this caption closer to the number above it specifically --
+       the panel's own flex gap (6px) applies uniformly between header/
+       value/caption, so a negative margin here (rather than shrinking
+       that shared gap) tightens only this one relationship. */
+    margin-top: -4px;
 }
 
 .summary-metric-median-value {
@@ -2432,11 +2778,10 @@ tbody tr.rerun-note-row:hover > td {
     color: var(--text-strong);
 }
 
-@media (max-width: 1440px) {
-    .container {
-        padding: 20px;
-    }
-
+/* Too narrow for the widest heading (~730px, nowrap) beside the controls grid
+   (~740px): stack them, controls first, each with the full width -- so the
+   arrangement still doesn't depend on which tab is active. */
+@media (max-width: 1580px) {
     .header {
         flex-direction: column;
         align-items: stretch;
@@ -2444,10 +2789,19 @@ tbody tr.rerun-note-row:hover > td {
     }
 
     .header-controls {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
         justify-content: flex-end;
         gap: 10px 14px;
         order: -1;
         padding-top: 0;
+    }
+}
+
+@media (max-width: 1440px) {
+    .container {
+        padding: 20px;
     }
 
     .search-box {
@@ -2456,12 +2810,8 @@ tbody tr.rerun-note-row:hover > td {
         max-width: 460px;
     }
 
-    .data-source-toggle-external {
-        margin-left: 0;
-    }
-
     .summary-bar {
-        padding: 12px 16px;
+        padding: 12px 16px 16px;
     }
 
     .summary-panel {
@@ -2523,6 +2873,7 @@ tbody tr.rerun-note-row:hover > td {
 
     .subtitle {
         font-size: 16px;
+        white-space: normal;
     }
 
     .search-box {
@@ -2588,10 +2939,6 @@ tbody tr.rerun-note-row:hover > td {
     .search-box {
         flex-basis: 100%;
         min-width: 0;
-    }
-
-    .data-source-toggle-external {
-        margin-left: 0;
     }
 
     .summary-bar {
@@ -2756,9 +3103,14 @@ tbody tr.rerun-note-row:hover > td {
     display: none;
 }
 
-/* The status hangs out of the flow, so reserve room for its two lines. */
+/* The status hangs out of the flow, so reserve room for it: one line, or two
+   when it carries a row of links (Amplitude's Load more / Refresh). */
 .header-controls:has(.import-status:not(:empty)) {
-    margin-bottom: 34px;
+    margin-bottom: 20px;
+}
+
+.header-controls:has(.import-status-links) {
+    margin-bottom: 37px;
 }
 
 .import-status-refresh {

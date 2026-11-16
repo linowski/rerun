@@ -15,6 +15,8 @@ A browser-based experimentation dashboard that analyzes A/B test results from mu
   name, id, primaryMetric, primaryMetricLabel, primaryMetricType,  // "binary" | "continuous"
   secondaryMetric, secondaryMetricLabel, secondaryMetricType,
   sampleSize, baseRate, triggered, traffic, trafficSubtitle, owner,
+  date,       // test end date, shown in the "Started" column
+  startDate,  // optional; when present with `date`, the Sample size column shows an avg/day sub-label
   testMethod  // "fixed" | "sequential" | "hybrid" | "bayesian" | null (unknown: no icon)
 }
 ```
@@ -44,17 +46,22 @@ All API mappers expose: `mapExperiment(raw) → standardized` and `mapExperiment
 - Helper: `erf`, `normalCDF`, `normalPDF`, `getZScore`, `calculateBinaryPower`, `calculateContinuousPower`
 
 ## Summary Bar Metrics
-- **Testing Sensitivity / per MDE** — % of experiments with >=80% power at fixed thresholds (0.5%, 1%, 2%, 5%, 10%, 15%)
+Always computed from the full loaded dataset, whichever tab is active (including Rerun).
+- **Testing Sensitivity / per MDE** — % of experiments with >=80% power at fixed thresholds (0.5%, 1%, 2%, 5%, 10%, 15%), plus the **median MDE** at 80% power (green <=5%, orange <=15%, red above)
 - **Median Rel. Effect** — Median primary metric across experiments
-- **Success Rate** — Experiments with primaryMetric > 0 AND pvalue < 0.05
-- **False Positive Risk** — Kohavi's Bayesian FPR: `alpha*(1-pi) / (alpha*(1-pi) + power*pi)` where pi = success rate
+- **Success Rate** — Experiments with primaryMetric > 0 AND pvalue < alpha (the header's **Alpha** input, default 0.05)
+- **False Positive Risk** — Kohavi's Bayesian FPR: `alpha*(1-pi) / (alpha*(1-pi) + power*pi)` where pi = success rate. Shown as "—" under Sequential (mSPRT), which has no established equivalent
+
+## Header Controls
+- **Method** — Fixed horizon or Sequential (mSPRT); **MDE** — % for the Power column; **Alpha** — significance cut for the P-val columns (fixed horizon) and the summary. All three persist in localStorage
 
 ## UI Conventions
 - Color spectrum: red (#dc3545) -> orange (#e0a800) -> green (#28a745) for good/bad indicators
 - `sensitivityColor(pct)` — Smooth RGB blend for 0-100% values
-- Power column shows the power % badge with the MDE under it (Type M/S are not displayed)
+- Power column shows the power % badge with the MDE under it (Type M/S are not displayed). Under Sequential (mSPRT) it's prefixed "≈": fixed-horizon power at sampleSize ÷ `SEQUENTIAL_SAMPLE_SIZE_INFLATION`
 - Tooltips: put the text in a `data-tip` attribute (never `title`); `initTooltips()` in `index.html` renders one shared `.tooltip` for all of them
-- Rerun list: a row's rerun button opens a draft panel (nothing is saved yet); the panel's **Rerun** button adds an entry to `rerunInstances`. A test can have many entries, and the Rerun tab shows one row per entry (each with **Remove**). Details (origin/notes/tags/type) live in `rerunDetails`, keyed by instance id, or by `draftEntryKey(selectionKey)` for drafts
+- Rerun list: a row's rerun button opens a draft panel (nothing is saved yet); the panel's **Rerun** button adds an entry to `rerunInstances`. A test can have many entries, and the Rerun tab shows one row per entry (each with **Remove**). Details (origin/notes/tags/type) live in `rerunDetails`, keyed by instance id, or by `draftEntryKey(selectionKey)` for drafts. The list persists in localStorage; the Rerun tab's **Export JSON / Import JSON** saves and loads it as a sidecar file (`format: "rerun-recommendations"`) linked to experiments by selection key, so it only imports against the same dataset
+- Rerun types (`RERUN_TYPES`) are test designs, plus a `group: 'Decide'` set (**Ship it**, **Unship it**) for candidates that need a decision rather than another run; each group renders after a light-grey divider (a disabled `.rerun-type-divider` option) in the dropdown
 - Tabs are scenario filters (Almost Significant, Squeeze The Lemon, etc.) that highlight matching rows
 
 ## Styling Preferences
