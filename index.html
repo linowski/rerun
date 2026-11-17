@@ -1022,7 +1022,8 @@
                 pvalue: numOrNaN(item.pvalue),
                 secondary: secondaryDataAttr(item),
                 secondaryPvalue: numOrNaN(item.secondaryPvalue),
-                decision: item.decision || ''
+                decision: item.decision || '',
+                hypothesis: item.hypothesis || 'two-sided'
             }, config.params || {}) || false;
         }
 
@@ -1262,18 +1263,26 @@
                 // a negative effect, a primary that wasn't significant, or a
                 // significant primary propped up by a secondary that doesn't back
                 // it up (not significant itself, or pointing the other way).
-                matches: ({ metric, pvalue, secondary, secondaryPvalue, decision }, p) =>
+                //
+                // A non-inferiority test is judged only on its own p-value (that
+                // the effect is above -margin): a small loss within the margin is
+                // what it set out to allow, and a quiet secondary doesn't
+                // contradict a "no worse" claim. So it's flagged only when that
+                // p-value didn't clear the threshold -- no harm wasn't shown.
+                matches: ({ metric, pvalue, secondary, secondaryPvalue, decision, hypothesis }, p) =>
                     decisionMatches(decision, p.decisionFilter.value)
-                    && (metric < 0 || pvalue > p.pMin.value
-                        || contradictingSecondary(metric, secondary, secondaryPvalue)),
+                    && (hypothesis === 'non-inferiority'
+                        ? pvalue > p.pMin.value
+                        : metric < 0 || pvalue > p.pMin.value
+                            || contradictingSecondary(metric, secondary, secondaryPvalue)),
                 signals: {
                     decision: decisionSignal,
-                    primary: ({ metric }) => metric < 0,
+                    primary: ({ metric, hypothesis }) => hypothesis !== 'non-inferiority' && metric < 0,
                     primaryP: ({ pvalue }, p) => pvalue > p.pMin.value,
-                    secondary: ({ metric, secondary, secondaryPvalue }) =>
-                        contradictingSecondary(metric, secondary, secondaryPvalue),
-                    secondaryP: ({ metric, secondary, secondaryPvalue }) =>
-                        contradictingSecondary(metric, secondary, secondaryPvalue)
+                    secondary: ({ metric, secondary, secondaryPvalue, hypothesis }) =>
+                        hypothesis !== 'non-inferiority' && contradictingSecondary(metric, secondary, secondaryPvalue),
+                    secondaryP: ({ metric, secondary, secondaryPvalue, hypothesis }) =>
+                        hypothesis !== 'non-inferiority' && contradictingSecondary(metric, secondary, secondaryPvalue)
                 }
             },
             'false-neg': {
@@ -2800,7 +2809,8 @@
                         metric: numOrNaN(item.primaryMetric),
                         pvalue: numOrNaN(item.pvalue),
                         secondary: secondaryDataAttr(item),
-                        secondaryPvalue: numOrNaN(item.secondaryPvalue)
+                        secondaryPvalue: numOrNaN(item.secondaryPvalue),
+                        hypothesis: item.hypothesis || 'two-sided'
                     });
                 }
             });

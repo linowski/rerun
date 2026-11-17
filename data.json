@@ -720,5 +720,61 @@
       }
     ],
     "preregisteredSampleSize": 890000
+  },
+  {
+    "name": "Slimmer Checkout Footer",
+    "id": "exp_checkout_footer",
+    "testMethod": "sequential",
+    "hypothesis": "non-inferiority",
+    "niMargin": 2,
+    "date": "2025-10-28",
+    "startDate": "2025-10-07",
+    "change": "Removed the payment-logo strip and legal links from the checkout footer to cut clutter",
+    "decision": "Shipped",
+    "primaryMetric": -0.3,
+    "primaryMetricLabel": "checkout completion",
+    "primaryMetricType": "binary",
+    "secondaryMetric": 0.4,
+    "secondaryMetricLabel": "revenue",
+    "secondaryMetricType": "continuous",
+    "sampleSize": 2400000,
+    "baseRate": 12,
+    "triggered": [
+      {
+        "type": "page"
+      }
+    ],
+    "traffic": 30,
+    "trafficSubtitle": "on checkout pages",
+    "owner": "Priya"
+  },
+  {
+    "name": "Lazy-Loaded Gallery Images",
+    "id": "exp_lazy_gallery",
+    "testMethod": "sequential",
+    "hypothesis": "non-inferiority",
+    "date": "2025-11-04",
+    "startDate": "2025-10-21",
+    "change": "Loaded product gallery images on scroll instead of up front, to speed up first paint",
+    "decision": "Shipped",
+    "primaryMetric": 0.4,
+    "primaryMetricLabel": "adds to cart",
+    "primaryMetricType": "binary",
+    "secondaryMetric": -0.6,
+    "secondaryMetricLabel": "gallery interactions",
+    "secondaryMetricType": "binary",
+    "sampleSize": 46000,
+    "baseRate": 7.2,
+    "triggered": [
+      {
+        "type": "page"
+      },
+      {
+        "type": "device"
+      }
+    ],
+    "traffic": 8,
+    "trafficSubtitle": "on product pages",
+    "owner": "Marcus"
   }
 ]
