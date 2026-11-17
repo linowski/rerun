@@ -164,6 +164,29 @@ h1 {
     border-color: var(--accent);
 }
 
+/* Positions the method note under the dropdown without taking up layout
+   room, so the header controls keep their place in every mode. */
+.method-select-wrap {
+    position: relative;
+    display: inline-flex;
+}
+
+/* As reported: which methods the tests actually used. Hangs under the
+   dropdown, out of the flow, like the import status under the toggle. */
+.method-note {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    margin-top: 4px;
+    font-size: 11px;
+    color: var(--text-subtle);
+    white-space: nowrap;
+}
+
+.method-note:empty {
+    display: none;
+}
+
 .power-method-select {
     padding: 8px 24px 8px 10px;
     color: var(--text-strong);
@@ -384,6 +407,8 @@ h1 {
     color: var(--text-strong);
 }
 
+/* The same size at every width: the narrow-layout queries shrink the
+   scenario tabs' icons, but this selector outranks theirs, so it stays put. */
 .tab[data-tab="rerun"] .tab-icon {
     width: 62px;
     height: 62px;
@@ -1483,10 +1508,18 @@ th.col-method {
     white-space: nowrap;
 }
 
+/* Method badge + hypothesis badge side by side, with "FIXED / 2-TAIL" in
+   small caps under them. */
 .test-method {
     display: inline-flex;
-    align-items: center;
-    gap: 6px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+}
+
+.test-method-icons {
+    display: inline-flex;
+    gap: 3px;
 }
 
 .test-method-icon {
@@ -1495,8 +1528,11 @@ th.col-method {
 }
 
 .test-method-label {
-    font-size: 12px;
-    color: var(--text-muted);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: var(--text-subtle);
 }
 
 .metric-container {
@@ -1613,6 +1649,16 @@ th.col-secondary-p {
     /* "< 0.001" must stay on one line -- a narrow column otherwise wraps
        between the "<" and the number, breaking the badge's own shape. */
     white-space: nowrap;
+}
+
+/* As reported, where the platform supplied no p-value and it had to be
+   estimated: outlined in the same colour instead of filled, so it reads as
+   a stand-in rather than a real result. Colour and border colour are set
+   inline. Same size as a filled pill, border included. */
+.pvalue-badge-est {
+    background-color: transparent;
+    border: 1.5px dashed;
+    padding: 1.5px 5.5px;
 }
 
 /* The "<" in "< 0.001" is grammar, not the figure itself -- smaller and
@@ -2853,13 +2899,6 @@ tbody tr.rerun-note-row:hover > td {
         height: 34px;
         flex-basis: 34px;
     }
-
-    /* Tabs wrap into rows here, so the leading divider would land mid-strip. */
-    .tab[data-tab="rerun"] .tab-icon {
-        width: 44px;
-        height: 44px;
-        flex-basis: 44px;
-    }
 }
 
 @media (max-width: 1040px) {
@@ -2928,6 +2967,17 @@ tbody tr.rerun-note-row:hover > td {
         padding: 20px 16px;
     }
 
+    /* The search box wraps onto the next line here, right where the note
+       hangs, so the note joins the flow and pushes it down instead. */
+    .method-select-wrap {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .method-note {
+        position: static;
+    }
+
     h1 {
         font-size: 28px;
     }
@@ -2963,12 +3013,6 @@ tbody tr.rerun-note-row:hover > td {
     .tab {
         flex-basis: 112px;
         padding: 12px 10px;
-    }
-
-    .tab[data-tab="rerun"] .tab-icon {
-        width: 26px;
-        height: 26px;
-        flex-basis: 26px;
     }
 
     /* Let the long placeholder sentence wrap on narrow screens instead of

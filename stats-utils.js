@@ -189,6 +189,45 @@ function mSprtPValue(z, r = 1) {
  * @param {number} baselineRate - Baseline conversion rate as percentage
  * @returns {number|null} Always-valid p-value, or null if it can't be calculated
  */
+/**
+ * Re-expresses a two-sided p-value for the test's own hypothesis:
+ *   - 'two-sided' (default): better or worse -- returned unchanged, or as
+ *     its always-valid version with `sequential`.
+ *   - 'superiority': one-sided, H1: effect > 0.
+ *   - 'non-inferiority': one-sided, H1: effect > -margin ("no worse than
+ *     -margin"), i.e. the observed effect shifted up by the margin.
+ * Works from the p-value alone, so it applies equally to a platform-reported
+ * p-value and an estimated one: the signed z is backed out of the two-sided
+ * p (z = sign(effect) * Φ⁻¹(1 - p/2)), which also gives the standard error
+ * (SE = |effect| / |z|) needed to move by the margin. With `sequential`, the
+ * shifted z gets the always-valid mSPRT p-value instead -- one-sided, so it is
+ * 1 whenever the evidence points the wrong way.
+ * @param {number} twoSidedP - Fixed-horizon two-sided p-value
+ * @param {number} effect - Observed relative effect, % (e.g. -1.5)
+ * @param {string} hypothesis - 'two-sided' | 'superiority' | 'non-inferiority'
+ * @param {number} margin - Non-inferiority margin, relative % (positive, e.g. 2 for -2%)
+ * @param {boolean} sequential - Return the always-valid version
+ * @returns {number|null} The p-value, or null when it can't be derived
+ *   (non-inferiority with a 0% effect has no recoverable standard error)
+ */
+function hypothesisPValue(twoSidedP, effect, hypothesis, margin, sequential = false) {
+    if (twoSidedP == null || effect == null) return null;
+    const twoSided = !hypothesis || hypothesis === 'two-sided';
+    if (twoSided && !sequential) return twoSidedP;
+    const p = Math.min(Math.max(twoSidedP, 1e-12), 1);
+    const z = p >= 1 ? 0 : Math.sign(effect) * getZScore(1 - p / 2);
+    // Two-sided always-valid: the mSPRT is symmetric, so |z| either way.
+    if (twoSided) return mSprtPValue(Math.abs(z));
+    let shifted = z;
+    if (hypothesis === 'non-inferiority') {
+        if (!effect || !z || !(margin > 0)) return null;
+        const se = Math.abs(effect) / Math.abs(z);
+        shifted = (effect + margin) / se;
+    }
+    if (sequential) return shifted > 0 ? mSprtPValue(shifted) : 1;
+    return Math.max(0, Math.min(1, 1 - normalCDF(shifted)));
+}
+
 function recalculateSequentialPValue(totalSampleSize, metricType, observedEffect, baselineRate = 5) {
     if (observedEffect === null || observedEffect === undefined) return null;
     const z = observedZStatistic(totalSampleSize, metricType, observedEffect, baselineRate);

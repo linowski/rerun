@@ -25,10 +25,14 @@
             <div class="header-controls">
                 <div class="mde-input-group">
                     <label for="powerMethodSelect" class="mde-label">Method</label>
-                    <select id="powerMethodSelect" class="power-method-select" data-tip="Fixed horizon: classic power at a pre-set sample size. Sequential (mSPRT): always-valid p-values safe to check at any time, using an inflated sample-size estimate since there's no fixed stopping point.">
-                        <option value="fixed">Fixed horizon</option>
-                        <option value="sequential">Sequential (mSPRT)</option>
-                    </select>
+                    <span class="method-select-wrap">
+                        <select id="powerMethodSelect" class="power-method-select" data-tip="As reported: the p-values your platform reported (estimated where a test has none), with power following each test's own method. Fixed horizon and Sequential (mSPRT) recalculate every test as if it had been run that way.">
+                            <option value="reported" selected>As reported</option>
+                            <option value="fixed">Fixed horizon</option>
+                            <option value="sequential">Sequential (mSPRT)</option>
+                        </select>
+                        <span class="method-note" id="methodNote"></span>
+                    </span>
                     <label for="mdeInput" class="mde-label mde-label-spaced">MDE</label>
                     <input type="text" id="mdeInput" class="mde-input" value="2" inputmode="decimal" pattern="[0-9]*\.?[0-9]*">
                     <span class="mde-suffix">%</span>
@@ -299,8 +303,8 @@
                     <!-- Name: also carries the change description underneath. -->
                     <col style="width: 18%;">
                     <col style="width: 7%;">
-                    <!-- Method: badge plus the longest short name, "Sequential". -->
-                    <col style="width: 108px;">
+                    <!-- Method: two badges over the longest label, "Hybrid / Non-inf". -->
+                    <col style="width: 112px;">
                     <!-- Decision: whether the experiment shipped. Fixed, not a
                          percentage: the "Not Shipped" pill (83px) plus room to
                          sit inside the lit signal box must fit at any width. -->
@@ -376,8 +380,22 @@
             return parseFloat(document.getElementById('mdeInput').value) || 2;
         }
 
+        // 'reported' (the platform's own p-values), or 'fixed' / 'sequential'
+        // (every test recalculated as if run that way).
         function getPowerMethod() {
-            return document.getElementById('powerMethodSelect')?.value || 'fixed';
+            return document.getElementById('powerMethodSelect')?.value || 'reported';
+        }
+
+        function isPValue(value) {
+            return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1;
+        }
+
+        // Whether any test in the data carries a p-value from its platform --
+        // the only case where "As reported" has anything to report.
+        function hasReportedPValues(data) {
+            return (Array.isArray(data) ? data : []).some(e =>
+                isPValue(e.pvalue) || isPValue(e.secondaryPvalue)
+                || (e.additionalComparisons || []).some(c => isPValue(c.pvalue)));
         }
 
         // Significance threshold for the P-val columns (fixed horizon only)
@@ -402,7 +420,7 @@
 
                 if (Array.isArray(experiment.additionalComparisons)) {
                     calculated.additionalComparisons = experiment.additionalComparisons.map(comp =>
-                        calculateStatsForItem(comp, baseRate, mde, method)
+                        calculateStatsForItem(comp, baseRate, mde, method, experiment)
                     );
                 }
 
@@ -418,21 +436,76 @@
         // SEQUENTIAL_SAMPLE_SIZE_INFLATION in stats-utils.js) -- there is no
         // exact closed form for sequential power the way there is for a
         // one-shot z-test.
-        function calculateStatsForItem(item, baseRate, mde, method) {
-            if (method === 'sequential') {
-                const effectiveSampleSize = item.sampleSize / SEQUENTIAL_SAMPLE_SIZE_INFLATION;
-                return {
-                    ...item,
-                    power: recalculatePower(effectiveSampleSize, item.primaryMetricType, mde, baseRate),
-                    pvalue: recalculateSequentialPValue(item.sampleSize, item.primaryMetricType, item.primaryMetric, baseRate),
-                    secondaryPvalue: recalculateSequentialPValue(item.sampleSize, item.secondaryMetricType, item.secondaryMetric, baseRate)
-                };
-            }
+        //
+        // As reported: the platform's own p-values where the test has them
+        // (estimated, and flagged as such, where it doesn't), and power
+        // following the test's own method. Both recalculated modes are "what
+        // if it had been run this way" lenses; this one is what actually ran.
+        //
+        // The primary p-value also follows the test's hypothesis (see
+        // hypothesisPValue in stats-utils.js): two-sided by default, or
+        // one-sided superiority / non-inferiority. A non-inferiority margin
+        // comes from the test's own niMargin, else the MDE input -- the
+        // smallest change that matters, so a smaller loss counts as no harm.
+        // Secondary metrics stay two-sided guardrails. A comparison row takes
+        // its parent test's hypothesis and method.
+        //
+        // A test with no recorded method is assumed sequential under As
+        // reported: nobody committed to a stopping point we know of, so it's
+        // read as if it was checked repeatedly. Its reported p-value then gets
+        // the always-valid (mSPRT) version -- the peeking penalty -- whereas a
+        // test known to be sequential keeps its reported p as is, since a
+        // platform's sequential p-value is already always-valid.
+        function calculateStatsForItem(item, baseRate, mde, method, parent = null) {
+            const known = m => Object.hasOwn(TEST_METHOD_ICONS, m || '');
+            const recordedMethod = known(item.testMethod) ? item.testMethod
+                : known(parent?.testMethod) ? parent.testMethod : null;
+            const testMethod = recordedMethod || 'sequential';
+            // Only a platform that actually ran a sequential test reports an
+            // always-valid p; an assumed-sequential one reported a plain p.
+            const knownSequential = recordedMethod === 'sequential';
+            const sequential = method === 'sequential'
+                || (method === 'reported' && testMethod === 'sequential');
+            const hypothesis = item.hypothesis || parent?.hypothesis || 'two-sided';
+            const ownMargin = item.niMargin ?? parent?.niMargin;
+            const niMargin = ownMargin > 0 ? ownMargin : mde;
+            const power = sequential
+                ? recalculatePower(item.sampleSize / SEQUENTIAL_SAMPLE_SIZE_INFLATION, item.primaryMetricType, mde, baseRate)
+                : recalculatePower(item.sampleSize, item.primaryMetricType, mde, baseRate);
+
+            const pvalueFor = (reportedP, metricType, effect, hyp) => {
+                const twoSided = hyp === 'two-sided';
+                const reported = method === 'reported' && isPValue(reportedP);
+                // A known-sequential platform's two-sided p is already
+                // always-valid, so it's used as is. Any other reported p is a
+                // plain two-sided one, re-expressed for the hypothesis and (if
+                // sequential, assumed or chosen) its always-valid version. A
+                // known-sequential one-sided case can't be back-converted, so
+                // it falls through to the estimate below.
+                if (reported && (twoSided || !knownSequential)) {
+                    const value = knownSequential
+                        ? reportedP
+                        : hypothesisPValue(reportedP, effect, hyp, niMargin, sequential);
+                    return { value, estimated: false };
+                }
+                const value = twoSided
+                    ? (sequential ? recalculateSequentialPValue : recalculatePValue)(item.sampleSize, metricType, effect, baseRate)
+                    : hypothesisPValue(recalculatePValue(item.sampleSize, metricType, effect, baseRate), effect, hyp, niMargin, sequential);
+                return { value, estimated: method === 'reported' };
+            };
+            const primary = pvalueFor(item.pvalue, item.primaryMetricType, item.primaryMetric, hypothesis);
+            const secondary = pvalueFor(item.secondaryPvalue, item.secondaryMetricType, item.secondaryMetric, 'two-sided');
             return {
                 ...item,
-                power: recalculatePower(item.sampleSize, item.primaryMetricType, mde, baseRate),
-                pvalue: recalculatePValue(item.sampleSize, item.primaryMetricType, item.primaryMetric, baseRate),
-                secondaryPvalue: recalculatePValue(item.sampleSize, item.secondaryMetricType, item.secondaryMetric, baseRate)
+                testMethod: recordedMethod,
+                hypothesis,
+                niMarginUsed: hypothesis === 'non-inferiority' ? niMargin : null,
+                power,
+                powerApprox: sequential,
+                pvalue: primary.value,
+                pvalueEstimated: primary.estimated && primary.value != null,
+                secondaryPvalue: secondary.value,
+                secondaryPvalueEstimated: secondary.estimated && secondary.value != null
             };
         }
 
@@ -587,23 +660,48 @@
         const TEST_METHOD_ICONS = {
             fixed: {
                 label: 'Fixed',
+                short: 'Fixed',
                 title: 'Fixed horizon: analyzed once, at a planned sample size',
                 path: '<path d="M3.5 8h9"/><path d="M13.5 4.5v7"/>'
             },
             sequential: {
                 label: 'Sequential',
+                short: 'Seq',
                 title: 'Sequential: valid to check results as they come in',
                 path: '<path d="M4.5 4.5v7"/><path d="M9 4.5v7"/><path d="M13.5 4.5v7"/>'
             },
             hybrid: {
                 label: 'Hybrid',
+                short: 'Hybrid',
                 title: 'Hybrid: early checks, then a final fixed-horizon analysis',
                 path: '<path d="M5 4.5v7"/><path d="M9 8h5.5"/>'
             },
             bayesian: {
                 label: 'Bayesian',
+                short: 'Bayes',
                 title: 'Bayesian',
                 path: '<path d="M3 11.5c2 0 3-7 6-7s4 7 6 7"/>'
+            }
+        };
+
+        // The test's hypothesis, paired with its method icon in the Method
+        // column: how many tails the primary p-value has, and for
+        // non-inferiority, the floor it has to clear.
+        const TEST_HYPOTHESIS_ICONS = {
+            'two-sided': {
+                label: '2-tail',
+                title: 'Two-sided: tests for a change either way, better or worse',
+                path: '<path d="M9 3.5v9"/><path d="M6.5 6L9 3.5L11.5 6"/><path d="M6.5 10L9 12.5L11.5 10"/>'
+            },
+            superiority: {
+                label: '1-tail',
+                title: 'Superiority (one-sided): tests only whether the variant is better',
+                path: '<path d="M9 12.5v-9"/><path d="M6.5 6L9 3.5L11.5 6"/>'
+            },
+            'non-inferiority': {
+                label: 'Non-inf',
+                title: 'Non-inferiority (one-sided): tests whether the variant is no worse than a margin',
+                path: '<path d="M4.5 12.5h9"/><path d="M9 12.5v-9"/><path d="M6.5 6L9 3.5L11.5 6"/>'
             }
         };
 
@@ -614,15 +712,26 @@
                 + `</svg>`;
         }
 
-        // Method column: the badge plus a short name, with the full
-        // description on hover. Comparison rows share their parent's method,
-        // so they pass nothing and show the empty placeholder.
-        function renderTestMethodCell(method) {
-            const icon = TEST_METHOD_ICONS[method];
-            if (!icon) return `<td class="col-method">${emptyCell()}</td>`;
-            return `<td class="col-method"><span class="test-method" data-tip="${icon.title}">`
-                + renderTestMethodIcon(icon)
-                + `<span class="test-method-label">${icon.label}</span></span></td>`;
+        // Method column: the method badge and the hypothesis badge side by
+        // side, with "FIXED / 2-TAIL" under them and the full description on
+        // hover. Comparison rows share their parent's, so they pass nothing
+        // and show the empty placeholder.
+        //
+        // With no recorded method, only a non-default hypothesis is shown (its
+        // badge alone, e.g. "NON-INF"): an unrecorded method isn't claimed,
+        // but a deliberately one-sided test still says so. Neither: empty.
+        function renderTestMethodCell(item = null) {
+            const icon = TEST_METHOD_ICONS[item?.testMethod];
+            const hypothesisSet = item?.hypothesis && item.hypothesis !== 'two-sided';
+            if (!icon && !hypothesisSet) return `<td class="col-method">${emptyCell()}</td>`;
+            const hyp = TEST_HYPOTHESIS_ICONS[item.hypothesis] || TEST_HYPOTHESIS_ICONS['two-sided'];
+            const margin = item.hypothesis === 'non-inferiority' && item.niMarginUsed
+                ? ` Margin: −${item.niMarginUsed}% (${item.niMargin > 0 ? 'set on the test' : 'from the MDE input'}).`
+                : '';
+            const methodTip = icon ? `${icon.title}. ` : 'Method not recorded (read as sequential under As reported). ';
+            return `<td class="col-method"><span class="test-method" data-tip="${escapeAttr(`${methodTip}${hyp.title}.${margin}`)}">`
+                + `<span class="test-method-icons">${icon ? renderTestMethodIcon(icon) : ''}${renderTestMethodIcon(hyp)}</span>`
+                + `<span class="test-method-label">${icon ? `${icon.short} / ` : ''}${hyp.label}</span></span></td>`;
         }
 
         // Compute metric display properties from raw values
@@ -691,14 +800,32 @@
                 : text;
         }
 
-        // A solid badge in both modes, coloured by pvalueStrength -- the same
+        // A solid badge in every mode, coloured by pvalueStrength -- the same
         // treatment as the Power column, so switching Method doesn't change
-        // how the column reads.
-        function pvalueCell(colClass, pvalue, isSequential) {
+        // how the column reads. Under As reported, a p-value the platform
+        // didn't supply (so it had to be estimated) is drawn outlined instead,
+        // so it never passes for a real result.
+        //
+        // `d` (the primary column only) adds the test's hypothesis to the
+        // tooltip when it isn't the default two-sided one. The Method column
+        // shows it at a glance.
+        function pvalueCell(colClass, pvalue, estimated, d = null) {
             if (pvalue == null) return `<td class="${colClass} pvalue"></td>`;
-            const alpha = isSequential ? SEQUENTIAL_ALPHA : getSelectedAlpha();
+            const alpha = getPowerMethod() === 'sequential' ? SEQUENTIAL_ALPHA : getSelectedAlpha();
             const color = sensitivityColor(pvalueStrength(pvalue, alpha));
-            return `<td class="${colClass} pvalue"><span class="pvalue-text pvalue-badge" style="background-color: ${color}">${formatPValueHtml(pvalue)}</span></td>`;
+            const hypothesis = d?.hypothesis && d.hypothesis !== 'two-sided' ? d.hypothesis : null;
+            const marginSource = d?.niMargin > 0 ? 'the test’s own margin' : 'the MDE input';
+            const tips = [
+                hypothesis === 'non-inferiority'
+                    ? `Non-inferiority: one-sided test that the effect is better than −${d.niMarginUsed}% (margin from ${marginSource}).`
+                    : hypothesis === 'superiority' ? 'Superiority: one-sided test that the effect is above 0.' : '',
+                estimated ? 'Estimated: the platform reported no p-value here, so it’s recalculated from the lift, sample size and baseline rate.' : ''
+            ].filter(Boolean).join(' ');
+            const tip = tips ? ` data-tip="${escapeAttr(tips)}"` : '';
+            const badge = estimated
+                ? `<span class="pvalue-text pvalue-badge pvalue-badge-est" style="color: ${color}; border-color: ${color}"${tip}>`
+                : `<span class="pvalue-text pvalue-badge" style="background-color: ${color}"${tip}>`;
+            return `<td class="${colClass} pvalue">${badge}${formatPValueHtml(pvalue)}</span></td>`;
         }
 
         // Sample size, then up to two small lines under it: the prereg alert
@@ -723,7 +850,6 @@
         function renderMetricCells(d) {
             const pm = metricProps(d.primaryMetric, d.primaryMetricLabel);
             const sm = metricProps(d.secondaryMetric, d.secondaryMetricLabel);
-            const isSequential = getPowerMethod() === 'sequential';
 
             return `
                 <td class="col-metric">
@@ -732,21 +858,21 @@
                         <span class="metric-label">${pm.labelDisplay}${d.primaryMetricType ? ` (${d.primaryMetricType})` : ''}</span>
                     </div>
                 </td>
-                ${pvalueCell('col-metric-p', d.pvalue, isSequential)}
+                ${pvalueCell('col-metric-p', d.pvalue, d.pvalueEstimated, d)}
                 <td class="col-secondary">
                     <div class="metric-container secondary-metric ${sm.cls}">
                         <span class="${sm.cls}">${sm.valueDisplay}</span>
                         <span class="metric-label">${sm.labelDisplay}${d.secondaryMetricType ? ` (${d.secondaryMetricType})` : ''}</span>
                     </div>
                 </td>
-                ${pvalueCell('col-secondary-p', d.secondaryPvalue, isSequential)}
+                ${pvalueCell('col-secondary-p', d.secondaryPvalue, d.secondaryPvalueEstimated)}
                 <td class="col-sample">${renderSampleCell(d)}</td>
                 <td class="col-power">
                     <div class="power-group">
                         <div class="power-col">
-                            <span class="power-value power-badge" style="background-color: ${d.power != null ? sensitivityColor(d.power) : '#999'}"${isSequential
+                            <span class="power-value power-badge" style="background-color: ${d.power != null ? sensitivityColor(d.power) : '#999'}"${d.powerApprox
                                 ? ` data-tip="Approximate: sequential (mSPRT) power, estimated as fixed-horizon power at this sample size ÷ ${SEQUENTIAL_SAMPLE_SIZE_INFLATION} -- the extra sample an always-valid test needs for the same power."`
-                                : ''}>${isSequential && d.power != null ? '<span class="power-approx">≈</span>' : ''}${displayValue(d.power, '%')}</span>
+                                : ''}>${d.powerApprox && d.power != null ? '<span class="power-approx">≈</span>' : ''}${displayValue(d.power, '%')}</span>
                             <span class="power-stat-label">${getSelectedMde()}% MDE</span>
                         </div>
                     </div>
@@ -905,17 +1031,56 @@
             return Number.isFinite(n) ? n : NaN;
         }
 
-        // `keepPage` holds the current page, for redraws while results stream in.
+        // "As reported" only means something when the data carries p-values
+        // from its platform. Without any (the dummy data, say) it's disabled
+        // and the table falls back to Fixed horizon -- without forgetting the
+        // preference, which comes back once data with reported values loads.
+        function syncMethodAvailability(data) {
+            const select = document.getElementById('powerMethodSelect');
+            if (!select) return;
+            const available = hasReportedPValues(data);
+            const preferred = select.dataset.preferred || 'reported';
+            select.querySelector('option[value="reported"]').disabled = !available;
+            select.value = preferred === 'reported' && !available ? 'fixed' : preferred;
+        }
+
+        // Under the Method dropdown, in As reported mode: which methods the
+        // tests actually used (each test's own testMethod), and how many
+        // primary p-values had to be estimated for lack of a reported one.
+        function updateMethodNote() {
+            const note = document.getElementById('methodNote');
+            if (!note) return;
+            if (getPowerMethod() !== 'reported') { note.textContent = ''; return; }
+            // A test with no recorded method is read as sequential (see
+            // calculateStatsForItem), so the note says so rather than "unknown".
+            const UNRECORDED = 'unrecorded';
+            const label = m => (TEST_METHOD_ICONS[m]?.label || UNRECORDED).toLowerCase();
+            const counts = {};
+            experimentsData.forEach(e => { const l = label(e.testMethod); counts[l] = (counts[l] || 0) + 1; });
+            const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+            const methods = entries.length === 1
+                ? (entries[0][0] === UNRECORDED
+                    ? 'Method unrecorded: read as sequential'
+                    : `All ${entries[0][0] === 'fixed' ? 'fixed horizon' : entries[0][0]}`)
+                : entries.map(([l, n]) => `${n} ${l === UNRECORDED ? 'unrecorded (read as sequential)' : l}`).join(' · ');
+            const estimated = calculatedExperimentsData.filter(e => e.pvalueEstimated).length;
+            note.textContent = methods + (estimated ? ` · ${estimated} p-value${estimated === 1 ? '' : 's'} estimated` : '');
+        }
+
+        // `keepPage` holds the current page and column sort, for redraws of the
+        // same rows: results streaming in, or a Method / MDE / Alpha change.
         function refreshUI(data, { keepPage = false } = {}) {
             const page = view.page;
             experimentsData = Array.isArray(data) ? data : [];
+            syncMethodAvailability(experimentsData);
             calculatedExperimentsData = withCalculatedStats(experimentsData);
+            updateMethodNote();
             view.rows = buildViewRows(calculatedExperimentsData);
             view.page = 0;
             pruneRerunSelectionsToDataset();
             const activeTab = document.querySelector('.tab.active');
             if (activeTab) {
-                updateHighlighting(activeTab.dataset.tab);
+                updateHighlighting(activeTab.dataset.tab, { keepSort: keepPage });
             } else {
                 renderView();
                 updateSummaryBar(calculatedExperimentsData);
@@ -959,7 +1124,9 @@
         const RERUN_SELECTION_KEY = 'rerun_selected_keys';
         const ACTIVE_TAB_KEY = 'rerun_active_tab';
         const MDE_KEY = 'rerun_mde';
-        const POWER_METHOD_KEY = 'rerun_power_method';
+        // A new key, not 'rerun_power_method': choices saved before As reported
+        // existed shouldn't override it becoming the default.
+        const POWER_METHOD_KEY = 'rerun_method';
         const ALPHA_KEY = 'rerun_alpha';
 
         // Startup ordering: a restored cache (API or import) renders rows and runs
@@ -1081,28 +1248,27 @@
                 countSubtitle: (matchCount, totalCount) =>
                     `${matchCount} out of ${totalCount} experiments may be false positives worth double checking.`,
                 params: {
-                    minEffect: { value: 5, step: 0.5, suffix: '%' },
                     pMin: { value: 0.05, step: 0.01, min: 0, max: 1 },
-                    // A shaky win only deserves a second look once someone has
+                    // A shaky result only deserves a second look once someone has
                     // actually acted on it -- an unshipped one hasn't cost anything
                     // yet, by default.
                     decisionFilter: { value: 'Shipped', options: ['Shipped', 'Not Shipped', 'Either'] }
                 },
                 template: p => [
                     'Highlight when', { param: 'decisionFilter' },
-                    'and effect >', { param: 'minEffect' },
-                    ' and (p-value >', { param: 'pMin' }, ' or secondary contradicts)'
+                    'and (effect is negative, p-value >', { param: 'pMin' }, ' or secondary contradicts)'
                 ],
-                // A shaky win isn't only a weak primary p-value -- it's also a
-                // significant primary propped up by a secondary that doesn't
-                // back it up: not significant itself, or pointing the other way.
+                // Any shipped result the data doesn't back up, whatever its size:
+                // a negative effect, a primary that wasn't significant, or a
+                // significant primary propped up by a secondary that doesn't back
+                // it up (not significant itself, or pointing the other way).
                 matches: ({ metric, pvalue, secondary, secondaryPvalue, decision }, p) =>
                     decisionMatches(decision, p.decisionFilter.value)
-                    && metric > p.minEffect.value
-                    && (pvalue > p.pMin.value || contradictingSecondary(metric, secondary, secondaryPvalue)),
+                    && (metric < 0 || pvalue > p.pMin.value
+                        || contradictingSecondary(metric, secondary, secondaryPvalue)),
                 signals: {
                     decision: decisionSignal,
-                    primary: ({ metric }, p) => metric > p.minEffect.value,
+                    primary: ({ metric }) => metric < 0,
                     primaryP: ({ pvalue }, p) => pvalue > p.pMin.value,
                     secondary: ({ metric, secondary, secondaryPvalue }) =>
                         contradictingSecondary(metric, secondary, secondaryPvalue),
@@ -2253,7 +2419,7 @@
                     </div>
                 </td>
                 <td class="col-started launch-date">${formatLaunchDate(experiment.date)}</td>
-                ${renderTestMethodCell(experiment.testMethod)}
+                ${renderTestMethodCell(experiment)}
                 ${renderDecisionCell(experiment)}
                 ${renderMetricCells(experiment)}
                 ${renderTrailingCells(experiment)}
@@ -4790,11 +4956,14 @@
 
         // Switching tabs changes ordering, filtering and highlighting together.
         // Each is decided from the data; one render applies the result.
-        function updateHighlighting(tabType) {
+        // `keepSort` is for redraws of the same rows (Method / MDE / Alpha
+        // changes): the column sort you picked stays rather than snapping back
+        // to the tab's default ordering.
+        function updateHighlighting(tabType, { keepSort = false } = {}) {
             // A different tab means a different result set, so restart at page 1.
             view.page = 0;
 
-            if (tabType !== 'rerun') {
+            if (tabType !== 'rerun' && !keepSort) {
                 // Sort highlighted rows to the top, with tab-specific ordering
                 sortByHighlighted(tabType);
             }
@@ -5132,10 +5301,15 @@
             // Untagged tests (no iterations field) are first-time tests.
             const isIteration = exp => (exp.iterations || 0) >= 1;
 
+            // Success Rate and FPR count only tests that were trying to win: a
+            // non-inferiority test's goal was "no worse", so it is neither a
+            // win nor a loss here.
+            const winTests = experiments.filter(exp => exp.hypothesis !== 'non-inferiority');
+
             // 2. Success Rate, shown twice: once for first-time tests and once for
             // those tagged as iterations. Same calculation, different population.
-            const firstTimeExperiments = experiments.filter(exp => !isIteration(exp));
-            const iterExperiments = experiments.filter(isIteration);
+            const firstTimeExperiments = winTests.filter(exp => !isIteration(exp));
+            const iterExperiments = winTests.filter(isIteration);
 
             const renderSuccessRate = (elId, exps) => {
                 if (exps.length === 0) {
@@ -5157,33 +5331,42 @@
             // Power is assumed at 80% as in the paper. Power at the selected MDE isn't the power
             // against the tests' real effects, and made π (and FPR) swing with the MDE input.
             //
-            // Not shown under sequential (mSPRT): the formula's α and "power" are
-            // fixed-horizon frequentist quantities (a one-shot test's false-positive
-            // rate and its power at a pre-set N). isSuccess() reads exp.pvalue, which
-            // under sequential mode is the always-valid p-value -- a different
-            // statistic with no established version of this same formula, not just
-            // the same number plugged into a formula that still happens to apply.
+            // Under sequential (mSPRT), isSuccess() reads the always-valid p-value.
+            // The same formula still applies as an approximation: the mSPRT keeps
+            // the chance of a false win at or below α however often it's checked,
+            // so α is an upper bound on the null rejection rate (the result leans
+            // conservative), and the 80% power was an assumption in both modes.
+            // Shown with "≈" and a tooltip saying so -- also under As reported
+            // when any input is approximate (a sequential test, or a p-value
+            // estimated for lack of a reported one).
             const fprPanel = document.getElementById('fprPanel');
-            if (getPowerMethod() === 'sequential') {
-                writeSummaryStat('fprValue', '—', { className: 'summary-metric-value summary-metric-empty' });
-                if (fprPanel) fprPanel.dataset.tip = 'Not shown under sequential (mSPRT): this formula assumes fixed-horizon α and power, which don’t have an established always-valid equivalent.';
+            const method = getPowerMethod();
+            const estimatedCount = experiments.filter(e => e.pvalueEstimated).length;
+            const sequentialCount = experiments.filter(e => e.powerApprox).length;
+            const approxReasons = [];
+            if (sequentialCount) approxReasons.push(method === 'sequential'
+                ? 'under sequential (mSPRT), the always-valid test keeps false wins at or below α however often it’s checked, so α is used as an upper bound and the figure leans conservative'
+                : `${sequentialCount} test${sequentialCount === 1 ? '' : 's'} read as sequential (by design, or with no method recorded), where α is only an upper bound on false wins`);
+            if (estimatedCount) approxReasons.push(`${estimatedCount} p-value${estimatedCount === 1 ? '' : 's'} estimated because the platform reported none`);
+            const approximate = approxReasons.length > 0;
+            if (fprPanel) {
+                if (approximate) fprPanel.dataset.tip = `Approximate: ${approxReasons.join('; ')}. Power is assumed at 80%.`;
+                else delete fprPanel.dataset.tip;
+            }
+            const ASSUMED_POWER = 0.8;
+            const overallSuccessCount = winTests.filter(isSuccess).length;
+            const winRate = winTests.length ? overallSuccessCount / winTests.length : 0;
+            const alphaPos = ALPHA / 2;
+            if (overallSuccessCount === 0) {
+                writeSummaryStat('fprValue', null);
             } else {
-                if (fprPanel) delete fprPanel.dataset.tip;
-                const ASSUMED_POWER = 0.8;
-                const overallSuccessCount = experiments.filter(isSuccess).length;
-                const winRate = overallSuccessCount / total;
-                const alphaPos = ALPHA / 2;
-                if (overallSuccessCount === 0) {
-                    writeSummaryStat('fprValue', null);
-                } else {
-                    const pi = Math.min(1, Math.max(0, (winRate - alphaPos) / (ASSUMED_POWER - alphaPos)));
-                    const fpr = (alphaPos * (1 - pi)) / (alphaPos * (1 - pi) + ASSUMED_POWER * pi);
-                    const fprPct = Math.round(fpr * 100);
-                    writeSummaryStat('fprValue', fprPct + '%', {
-                        bands: [[fprPct <= 20, 'metric-good'], [fprPct <= 50, 'metric-warning'],
-                                [true, 'metric-danger']]
-                    });
-                }
+                const pi = Math.min(1, Math.max(0, (winRate - alphaPos) / (ASSUMED_POWER - alphaPos)));
+                const fpr = (alphaPos * (1 - pi)) / (alphaPos * (1 - pi) + ASSUMED_POWER * pi);
+                const fprPct = Math.round(fpr * 100);
+                writeSummaryStat('fprValue', (approximate ? '≈' : '') + fprPct + '%', {
+                    bands: [[fprPct <= 20, 'metric-good'], [fprPct <= 50, 'metric-warning'],
+                            [true, 'metric-danger']]
+                });
             }
 
             // 4. Median Relative Effect — shown inside each Success Rate panel
@@ -5415,34 +5598,60 @@
         // MDE / alpha / power method: recalculate and persist on change, same
         // as the active tab, so a reload picks up where you left off instead
         // of always resetting to fixed-horizon / 2% / 0.05.
+        // Keeps the current page: these are tweaks to how the same rows read,
+        // not a new dataset, so jumping back to page 1 would lose your place.
+        let appliedStatsInputs = '';
         function onStatsInputChange() {
             writeStored(MDE_KEY, mdeInput.value);
             writeStored(ALPHA_KEY, alphaInput.value);
-            refreshUI(experimentsData);
+            appliedStatsInputs = `${mdeInput.value}|${alphaInput.value}`;
+            refreshUI(experimentsData, { keepPage: true });
+        }
+
+        // MDE and Alpha apply as you type, after a short pause, rather than
+        // only on blur/Enter. A half-typed value ("", "0.", "0") is skipped
+        // until it's a usable number; blur still applies whatever is left,
+        // unless typing already did.
+        function liveStatsInput(input, isUsable) {
+            let timer;
+            input.addEventListener('input', () => {
+                clearTimeout(timer);
+                const value = parseFloat(input.value);
+                if (!isUsable(value) || input.value.trim().endsWith('.')) return;
+                timer = setTimeout(onStatsInputChange, 250);
+            });
+            input.addEventListener('blur', () => {
+                clearTimeout(timer);
+                if (`${mdeInput.value}|${alphaInput.value}` !== appliedStatsInputs) onStatsInputChange();
+            });
+            input.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') this.blur();
+            });
         }
 
         const mdeInput = document.getElementById('mdeInput');
         const savedMde = readStored(MDE_KEY);
         if (savedMde !== null) mdeInput.value = savedMde;
-        mdeInput.addEventListener('blur', onStatsInputChange);
-        mdeInput.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter') this.blur();
-        });
 
         const alphaInput = document.getElementById('alphaInput');
         const savedAlpha = readStored(ALPHA_KEY);
         if (savedAlpha !== null) alphaInput.value = savedAlpha;
-        alphaInput.addEventListener('blur', onStatsInputChange);
-        alphaInput.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter') this.blur();
-        });
 
+        appliedStatsInputs = `${mdeInput.value}|${alphaInput.value}`;
+        liveStatsInput(mdeInput, v => v > 0);
+        liveStatsInput(alphaInput, v => v > 0 && v < 1);
+
+        // The preference lives on the select (dataset.preferred) as well as in
+        // storage: syncMethodAvailability may show Fixed horizon while As
+        // reported is unavailable, and must know to switch back afterwards.
         const powerMethodSelect = document.getElementById('powerMethodSelect');
         const savedPowerMethod = readStored(POWER_METHOD_KEY);
-        if (savedPowerMethod === 'fixed' || savedPowerMethod === 'sequential') {
-            powerMethodSelect.value = savedPowerMethod;
-        }
+        powerMethodSelect.dataset.preferred = ['reported', 'fixed', 'sequential'].includes(savedPowerMethod)
+            ? savedPowerMethod
+            : 'reported';
+        syncMethodAvailability(experimentsData);
         powerMethodSelect.addEventListener('change', function() {
+            this.dataset.preferred = this.value;
             writeStored(POWER_METHOD_KEY, this.value);
             onStatsInputChange();
         });
