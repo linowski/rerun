@@ -4,40 +4,64 @@ Rerun is a browser-based experiment analysis dashboard for reviewing A/B test re
 
 ## What It Does
 
-- Loads demo experiment data from `data.json`.
-- Imports platform data through mapper files in `mappers/`.
-- Supports GrowthBook API data, the Amplitude Experiment Management API, and Convert aggregated CSV exports.
-- Normalizes platform responses into a shared experiment shape.
-- Recalculates power and p-values in the browser.
-- Highlights scenarios such as almost-significant tests, likely false positives, false negatives, and promising negative tests.
+- Loads demo experiment data from `data.json`, or imports real data: GrowthBook API, Amplitude Experiment Management API, Convert aggregated CSV exports, or a local JSON file already in the shape below. Mappers in `mappers/` normalize each platform into that shared shape.
+- Reads results three ways (**Method**): **As reported** uses each platform's own p-values (estimating the rest) and each test's own design; **Fixed horizon** and **Sequential (mSPRT)** recalculate every test as if it had been run that way. Tests can be two-sided, one-sided superiority, or non-inferiority with a margin.
+- Shows power at a chosen MDE, an adjustable significance level (Alpha), and per-test flags such as missing preregistration and average sample per day.
+- Summarizes the whole program: success rate, Kohavi's false positive risk, and testing sensitivity (the share of tests powered to detect each effect size, plus the median MDE).
+- Highlights rerun candidates by scenario: Almost Significant, Squeeze The Lemon, Promising Losers, Too Good To Be True, and Too Good To Be False.
+- Builds a rerun list: pick a test design for each candidate (or a Ship it / Unship it decision), add notes and tags, compare its screenshots, and export or import the list as JSON.
 
 ## Quick Start
 
-Open `index.html` in a browser.
+Serve this folder over HTTP and open the `localhost` URL, for example with `npx serve`, `python -m http.server`, or VS Code's Live Server. Opening `index.html` straight from disk (`file://`) blocks the data from loading.
 
 To use real data, click **Import** and pick a platform. API keys are entered there, not stored in any project file.
 
 ## Data Shape
 
-Mappers normalize platform data to objects like:
+Mappers normalize platform data into an array of experiment objects, and a
+local JSON import takes the same array directly. Effects are relative lifts in
+percent (`5` means +5%).
 
 ```js
 {
-  name,
-  id,
-  date,
-  primaryMetric,
+  // Identity
+  name,                     // experiment name
+  id,                       // stable id; rerun lists and exports link to it
+  url,                      // optional link to the experiment on its platform
+  change,                   // optional: what the variation did
+  owner,
+
+  // Timing
+  date,                     // end date, YYYY-MM-DD
+  startDate,                // optional; with `date`, shows an average sample per day
+
+  // Results
+  primaryMetric,            // relative lift, %
   primaryMetricLabel,
-  primaryMetricType,
-  secondaryMetric,
+  primaryMetricType,        // "binary" | "continuous"
+  secondaryMetric,          // optional, same shape as the primary
   secondaryMetricLabel,
   secondaryMetricType,
-  sampleSize,
-  baseRate,
-  triggered,
-  traffic,
-  trafficSubtitle,
-  owner
+  pvalue,                   // optional: the platform's two-sided p-value for the primary
+  secondaryPvalue,          // optional: same, for the secondary
+  sampleSize,               // total across arms
+  baseRate,                 // control conversion rate, %; used where p-values must be estimated
+
+  // Design
+  testMethod,               // optional: "fixed" | "sequential" | "hybrid" | "bayesian"
+                            //   (none: read as sequential, the conservative assumption)
+  hypothesis,               // optional: "two-sided" (default) | "superiority" | "non-inferiority"
+  niMargin,                 // optional non-inferiority margin, % (defaults to the MDE input)
+  preregisteredSampleSize,  // optional; fixed-horizon tests without it are flagged
+  iterations,               // optional; 1+ marks a rerun of an earlier test
+
+  // Context
+  decision,                 // optional: "Shipped" | "Not Shipped"
+  triggered,                // optional: array of { type } trigger descriptors
+  traffic,                  // optional: % of traffic exposed
+  additionalComparisons,    // optional: extra variations, each { variationName, ...results }
+  screenshots               // optional: [{ arm, armLabel, viewport, pageState, file }]
 }
 ```
 
@@ -55,8 +79,10 @@ The Convert export utility can optionally remember a secret key in browser `loca
 - `styles.css` - dashboard styles
 - `stats-utils.js` - statistical calculations
 - `mappers/` - platform normalization code
-- `utilities/` - standalone helper tools
+- `utilities/` - standalone helper tools (`convert-export.html` exports Convert.com experiments and results to CSV)
+- `images/` - tab and scenario icons (Streamline, see Third-Party Assets)
 - `data.json` - demo/fallback experiment data
+- `_data/` - not in the repo: gitignored, for your own private experiment data, imported via **Import → Local JSON File**
 
 ## License
 

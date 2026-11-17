@@ -14,7 +14,13 @@ A browser-based experimentation dashboard that analyzes A/B test results from mu
 {
   name, id, primaryMetric, primaryMetricLabel, primaryMetricType,  // "binary" | "continuous"
   secondaryMetric, secondaryMetricLabel, secondaryMetricType,
-  sampleSize, baseRate, triggered, traffic, trafficSubtitle, owner,
+  sampleSize, baseRate, triggered, traffic, owner,
+  trafficSubtitle,  // produced by mappers but not currently displayed
+  url, change, decision,     // optional: platform link, what the variation did, "Shipped" | "Not Shipped"
+  preregisteredSampleSize,   // optional; fixed-horizon tests without one get a "No prereg" flag
+  iterations,                // optional; >= 1 marks a rerun of an earlier test (Success Rate of Iterations)
+  additionalComparisons,     // optional: extra variations, [{ variationName, ...results }]
+  screenshots,               // optional: [{ arm, armLabel, viewport, pageState, file }]
   date,       // test end date, shown in the "Started" column
   startDate,  // optional; when present with `date`, the Sample size column shows an avg/day sub-label
   pvalue, secondaryPvalue,  // optional; the p-values the platform reported (two-sided), used by Method "As reported"
