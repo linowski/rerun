@@ -75,17 +75,14 @@ const AmplitudeMapper = {
     },
 
     /**
-     * Attaches results from Amplitude's MCP `use_amp_experiments` tool
-     * (action 'analyze') to each raw experiment as `analysis` -- see
-     * analysisArm below -- and, from action 'get', its `analysisParams`
-     * (statistical method, alpha) and metric ids, whose names come from
-     * `use_amplitude_metrics`. Requires an mcp sign-in (see `mcp` below).
-     * Throws if the first experiment fails; later failures are skipped.
-     * @param {Array} experiments - Raw experiments from fetchExperiments()
-     * @param {Function} [onProgress] - Called with (done, total) after each one
-     * @returns {Promise<number>} - How many experiments got results
+     * Batched setup before results are fetched for `experiments`: checks the
+     * MCP sign-in offers the analyze tool (throws if not), then adds each
+     * one's `analysisParams` (statistical method, alpha) and metric ids from
+     * action 'get', and its primary metric's name from `use_amplitude_metrics`.
+     * These are settings, not results, so adding them in place is safe.
+     * Requires an mcp sign-in (see `mcp` below).
      */
-    async fetchResults(experiments, onProgress = () => {}) {
+    async prepare(experiments) {
         const tools = await this.mcp.listTools();
         if (!tools.some(t => t.name === 'use_amp_experiments')) {
             const names = tools.map(t => t.name);
@@ -94,57 +91,39 @@ const AmplitudeMapper = {
                 + `Tools it offers (${names.length}): ${names.join(', ') || 'none'}`
             );
         }
-
-        // Settings first: a few batched calls, so the test-method badges
-        // show before the slower per-experiment analysis finishes.
+        // A few batched calls, so the test-method badges show before the
+        // slower per-experiment analysis finishes.
         await this.fetchAnalysisParams(experiments);
         await this.fetchMetricNames(experiments, tools);
-
-        let done = 0;
-        let analyzed = 0;
-        const analyze = async experiment => {
-            // 'analyze' queries one experiment's primary metric; the tool's
-            // optional metricIds/groupBy/filters are left out.
-            const result = await this.mcp.callTool('use_amp_experiments', {
-                action: 'analyze',
-                id: String(experiment.id)
-            });
-            experiment.analysis = this.findAnalysis(this.mcp.parseToolResult(result));
-            if (experiment.analysis) {
-                analyzed++;
-            } else {
-                const excerpt = JSON.stringify(result).slice(0, 400);
-                console.warn(`Amplitude analyze returned no usable results for "${experiment.name}":`, excerpt);
-            }
-        };
-
-        // The first call runs alone: if it fails, the call itself is wrong and
-        // there is no point repeating it for every experiment.
-        if (experiments.length) {
-            await analyze(experiments[0]);
-            onProgress(++done, experiments.length);
-        }
-
-        // The rest run a few at a time; a failure here is usually one
-        // experiment without enough data yet, so it is skipped.
-        const queue = experiments.slice(1);
-        const worker = async () => {
-            while (queue.length) {
-                const experiment = queue.shift();
-                try {
-                    await analyze(experiment);
-                } catch (error) {
-                    console.warn(`Amplitude analyze skipped "${experiment.name}":`, error.message);
-                }
-                onProgress(++done, experiments.length);
-            }
-        };
-        await Promise.all(Array.from({ length: this.resultConcurrency }, worker));
-        return analyzed;
     },
 
-    // Parallel analyze calls; kept low to stay clear of Amplitude rate limits.
-    resultConcurrency: 4,
+    /**
+     * One experiment's results, for ResumableResults.run: the MCP
+     * `use_amp_experiments` analyze output (its primary metric) attached as
+     * `analysis` -- see analysisArm below. Resolves to a new object. A reply
+     * without usable results is permanent (usually too little data, which a
+     * finished experiment will not gain); a failed call is retried next load.
+     */
+    async fetchOne(experiment) {
+        const result = await this.mcp.callTool('use_amp_experiments', {
+            action: 'analyze',
+            id: String(experiment.id)
+        });
+        const analysis = this.findAnalysis(this.mcp.parseToolResult(result));
+        if (!analysis) {
+            console.warn(`Amplitude analyze returned no usable results for "${experiment.name}":`,
+                JSON.stringify(result).slice(0, 400));
+            throw ResumableResults.permanentError('returned no usable results');
+        }
+        return { ...experiment, analysis };
+    },
+
+    // Whether a saved experiment's results may be out of date: it changed
+    // state (e.g. was still running when last analyzed) or end date.
+    changed(fresh, saved) {
+        const facts = exp => JSON.stringify([exp.state, exp.endDate || null, exp.updatedAt || null]);
+        return facts(fresh) !== facts(saved);
+    },
 
     // Experiments per 'get' call.
     getBatchSize: 20,

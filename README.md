@@ -4,7 +4,7 @@ Rerun is a browser-based experiment analysis dashboard for reviewing A/B test re
 
 ## What It Does
 
-- Loads demo experiment data from `data.json`, or imports real data: GrowthBook API, Amplitude Experiment Management API, Convert aggregated CSV exports, or a local JSON file already in the shape below. Mappers in `mappers/` normalize each platform into that shared shape.
+- Loads demo experiment data from `data.json`, or imports real data: GrowthBook API, Amplitude Experiment Management API, PostHog API, Convert aggregated CSV exports, or a local JSON file already in the shape below. Mappers in `mappers/` normalize each platform into that shared shape.
 - Reads results three ways (**Method**): **As reported** uses each platform's own p-values (estimating the rest) and each test's own design; **Fixed horizon** and **Sequential (mSPRT)** recalculate every test as if it had been run that way. Tests can be two-sided, one-sided superiority, or non-inferiority with a margin.
 - Shows power at a chosen MDE, an adjustable significance level (Alpha), and per-test flags such as missing preregistration and average sample per day.
 - Summarizes the whole program: success rate, Kohavi's false positive risk, and testing sensitivity (the share of tests powered to detect each effect size, plus the median MDE).
@@ -60,6 +60,7 @@ percent (`5` means +5%).
   decision,                 // optional: "Shipped" | "Not Shipped"
   triggered,                // optional: array of { type } trigger descriptors
   traffic,                  // optional: % of traffic exposed
+  reachLabel, reachNote,    // optional: what `traffic` is a % of (default "of traffic") and a tooltip
   additionalComparisons,    // optional: extra variations, each { variationName, ...results }
   screenshots               // optional: [{ arm, armLabel, viewport, pageState, file }]
 }
@@ -90,7 +91,7 @@ The source code in this repository is licensed under the [MIT License](LICENSE).
 
 ## Third-Party Assets
 
-The icons in `images/` are from [Streamline](https://streamlinehq.com), used
+The icons in `images/` (except `iconFlag.svg`, drawn for this project) are from [Streamline](https://streamlinehq.com), used
 under a [Streamline Premium license](https://help.streamlinehq.com/en/articles/5354366-streamline-premium-licenses).
 They are not covered by the MIT license above. Streamline Premium terms permit
 use within an open-source project with attribution, but do not permit
@@ -100,8 +101,20 @@ your own Streamline license.
 
 ## Custom Integrations
 
-Only the GrowthBook API, Amplitude and Convert CSV import are wired up to
+Only the GrowthBook API, Amplitude, PostHog and Convert CSV import are wired up to
 pull real data today; the other mappers are scaffolding.
+
+PostHog uses a **personal API key** (Settings → Personal API keys) with the
+read scopes `experiment:read` and `query:read`, plus the project's URL or ID
+(blank uses the key's current project on US or EU cloud; a self-hosted
+instance needs its URL). Rerun lists the project's finished experiments (running ones are skipped) and runs
+one results query per experiment for its first primary and secondary metric,
+all from the browser.
+
+For every API import, results are saved as they arrive. A reload makes no calls
+beyond finishing experiments an interrupted load did not get to; **Refresh**
+under the Import toggle fetches only new or changed experiments, and **Re-pull
+all** fetches everything again.
 
 Amplitude uses a read-only **Management API key** (Settings → Organization
 settings → API keys), entered in the import dialog, to list experiments.

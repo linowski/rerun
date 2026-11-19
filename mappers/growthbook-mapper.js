@@ -4,70 +4,72 @@
  */
 
 const GrowthBookMapper = {
-    /**
-     * Fetches experiments from GrowthBook API
-     * @param {string} apiHost - API host URL
-     * @param {string} apiKey - API key for authentication
-     * @returns {Promise<Array>} - Array of filtered raw experiments
-     */
-    async fetchExperiments(apiHost, apiKey) {
-        const response = await fetch(`${apiHost}/api/v1/experiments`, {
+    async request(apiHost, path, apiKey) {
+        const response = await fetch(`${apiHost}${path}`, {
             method: 'GET',
             headers: {
                 'Authorization': `Bearer ${apiKey}`,
                 'Content-Type': 'application/json'
             }
         });
-
         if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+            const error = new Error(`HTTP error! status: ${response.status}`);
+            error.status = response.status;
+            throw error;
+        }
+        return response.json();
+    },
+
+    /**
+     * Lists stopped experiments with traffic, every page (GrowthBook returns
+     * 10 per page unless asked for more, 100 at most).
+     * @param {string} apiHost - API host URL
+     * @param {string} apiKey - API key for authentication
+     * @returns {Promise<Array>} - Array of filtered raw experiments
+     */
+    async fetchExperiments(apiHost, apiKey) {
+        const rawExperiments = [];
+        let offset = 0;
+        for (;;) {
+            const data = await this.request(apiHost, `/api/v1/experiments?limit=100&offset=${offset}`, apiKey);
+            const page = data.experiments || (Array.isArray(data) ? data : []);
+            rawExperiments.push(...page);
+            if (!data.hasMore || !page.length) break;
+            offset = data.nextOffset ?? offset + page.length;
         }
 
-        const data = await response.json();
-        const rawExperiments = data.experiments || data;
-
         // Filter only stopped experiments with non-zero traffic allocation
-        const filteredExperiments = rawExperiments.filter(exp => {
+        return rawExperiments.filter(exp => {
             const isStopped = exp.status === 'stopped';
             const hasTraffic = (exp.coverage && exp.coverage > 0) ||
                               (exp.trafficSplit && Object.values(exp.trafficSplit).some(v => v > 0)) ||
                               (exp.phases && exp.phases.some(p => p.coverage > 0));
             return isStopped && hasTraffic;
         });
+    },
 
-        // Fetch detailed results for the first 10 experiments
-        const limit = Math.min(10, filteredExperiments.length);
-        for (let i = 0; i < limit; i++) {
-            const exp = filteredExperiments[i];
-            const experimentId = exp.id || exp.experimentId || exp.key;
-
-            if (!experimentId) {
-                console.warn(`Experiment at index ${i} has no ID field:`, exp);
-                continue;
+    /**
+     * One experiment's results, for ResumableResults.run, attached as
+     * `detailedResults`. Resolves to a new object. A client error (no
+     * results for it, no access) is permanent; anything else is retried.
+     */
+    async fetchOne(experiment, apiHost, apiKey) {
+        const experimentId = experiment.id || experiment.experimentId || experiment.key;
+        if (!experimentId) throw ResumableResults.permanentError('has no id');
+        try {
+            const results = await this.request(apiHost, `/api/v1/experiments/${experimentId}/results`, apiKey);
+            return { ...experiment, detailedResults: results };
+        } catch (error) {
+            if (error.status >= 400 && error.status < 500 && error.status !== 429) {
+                throw ResumableResults.permanentError(`results request failed (${error.message})`);
             }
-
-            try {
-                const resultsResponse = await fetch(`${apiHost}/api/v1/experiments/${experimentId}/results`, {
-                    method: 'GET',
-                    headers: {
-                        'Authorization': `Bearer ${apiKey}`,
-                        'Content-Type': 'application/json'
-                    }
-                });
-
-                if (resultsResponse.ok) {
-                    const results = await resultsResponse.json();
-                    // Attach detailed results to the experiment object
-                    filteredExperiments[i].detailedResults = results;
-                } else {
-                    console.warn(`Failed to fetch results for experiment ${experimentId}: ${resultsResponse.status}`);
-                }
-            } catch (error) {
-                console.warn(`Could not fetch results for experiment ${experimentId}:`, error);
-            }
+            throw error;
         }
+    },
 
-        return filteredExperiments;
+    // Whether a saved experiment's results may be out of date.
+    changed(fresh, saved) {
+        return (fresh.dateUpdated || '') !== (saved.dateUpdated || '');
     },
 
     /**

@@ -1964,6 +1964,10 @@ tr.sub-row.highlighted-row .sub-row-name {
     background-color: var(--surface-soft);
 }
 
+.saved-import-hint:empty {
+    display: none;
+}
+
 .platform-help-note {
     margin-top: 10px;
     padding: 10px 12px;
@@ -3147,14 +3151,10 @@ tbody tr.rerun-note-row:hover > td {
     display: none;
 }
 
-/* The status hangs out of the flow, so reserve room for it: one line, or two
-   when it carries a row of links (Amplitude's Load more / Refresh). */
+/* The status hangs out of the flow, so reserve room for its one line
+   (links included: they follow the text on the same line). */
 .header-controls:has(.import-status:not(:empty)) {
     margin-bottom: 20px;
-}
-
-.header-controls:has(.import-status-links) {
-    margin-bottom: 37px;
 }
 
 .import-status-refresh {
@@ -3170,7 +3170,31 @@ tbody tr.rerun-note-row:hover > td {
     text-decoration: underline;
 }
 
-.amplitude-results {
+/* Destructive links on the Rerun tab's file row (Clear list, Remove them):
+   grey rather than blue, so they don't compete with Export / Import. */
+.rerun-clear-btn {
+    color: var(--text-subtle);
+}
+
+/* "N more saved for data not loaded now": informational, not part of the
+   rule-sentence black used elsewhere on this row. */
+.rerun-hidden-count {
+    color: var(--text-subtle);
+}
+
+/* Holds the hidden-reruns note inline with the rest of the row. */
+.rerun-hidden-note {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px 6px;
+}
+
+.rerun-hidden-note:empty {
+    display: none;
+}
+
+.amplitude-results,
+.posthog-project {
     margin-top: 16px;
 }
 

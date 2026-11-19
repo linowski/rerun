@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none" stroke="#000" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">
+  <!-- Feature flag trigger: a pole and a waving flag, drawn to match the
+       outline icons beside it. Placeholder until one is picked from the
+       Streamline set. -->
+  <path d="M10 44V5"/>
+  <path d="M10 7c5-3 10-3 15 0s10 3 15 0v20c-5 3-10 3-15 0s-10-3-15 0"/>
+</svg>

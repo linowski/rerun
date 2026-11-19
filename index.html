@@ -8,11 +8,13 @@
     <link rel="stylesheet" href="styles.css?v=20260902">
     <script src="stats-utils.js"></script>
     <script src="mappers/mapper-utils.js"></script>
+    <script src="mappers/resumable-results.js"></script>
     <script src="mappers/growthbook-mapper.js"></script>
     <script src="mappers/convert-mapper.js"></script>
     <script src="mappers/eppo-mapper.js"></script>
     <script src="mappers/absmartly-mapper.js"></script>
     <script src="mappers/amplitude-mapper.js"></script>
+    <script src="mappers/posthog-mapper.js"></script>
     <script src="mappers/convert-csv-mapper.js"></script>
 </head>
 <body>
@@ -58,7 +60,7 @@
                         <span class="toggle-text">Dummy Data</span>
                         <input type="checkbox" id="dataSourceToggle" class="toggle-checkbox">
                         <span class="toggle-slider"></span>
-                        <span class="toggle-text">Import</span>
+                        <span class="toggle-text" id="importToggleText">Import</span>
                     </label>
                     <div class="import-status" id="importStatus"></div>
                 </div>
@@ -105,14 +107,20 @@
                                 <span class="platform-status platform-status-live">Connected</span>
                             </label>
                             <label class="radio-option">
+                                <input type="radio" name="platform" value="posthog" class="radio-input">
+                                <span class="radio-label">PostHog</span>
+                                <span class="platform-status platform-status-live">Connected</span>
+                            </label>
+                            <label class="radio-option">
                                 <input type="radio" name="platform" value="local-json" class="radio-input">
                                 <span class="radio-label">Local JSON File</span>
                                 <span class="platform-status platform-status-live">Connected</span>
                             </label>
                         </div>
+                        <div class="form-hint saved-import-hint" id="savedImportHint"></div>
                         <div class="platform-help-note">
                             <div class="platform-help-title">Need a Custom Integration and Setup?</div>
-                            Only GrowthBook, Amplitude and Convert CSV import real data right now. Jakub is happy to wire up any of these (or another platform entirely).<br>&rarr; <a href="https://linowski.ca" target="_blank" rel="noopener" class="platform-help-cta">Contact me at Linowski.ca</a>
+                            Only GrowthBook, Amplitude, PostHog and Convert CSV import real data right now. Jakub is happy to wire up any of these (or another platform entirely).<br>&rarr; <a href="https://linowski.ca" target="_blank" rel="noopener" class="platform-help-cta">Contact me at Linowski.ca</a>
                         </div>
                     </div>
                     <div class="form-group" id="apiKeyGroup">
@@ -127,6 +135,12 @@
                             data-1p-ignore="true"
                             data-bwignore="true">
                         <div class="form-hint" id="apiKeyHint"></div>
+                        <div class="posthog-project" id="posthogProjectGroup" style="display: none;">
+                            <label for="posthogProjectInput">Project URL or ID</label>
+                            <input type="text" id="posthogProjectInput" class="form-input"
+                                placeholder="e.g. https://us.posthog.com/project/12345">
+                            <div class="form-hint">Any page inside the project works. Leave blank for the key's current project on PostHog Cloud (US or EU).</div>
+                        </div>
                         <div class="amplitude-results" id="amplitudeResultsGroup" style="display: none;">
                             <label>Results (lift, p-value, sample size)</label>
                             <div class="amplitude-results-row">
@@ -285,8 +299,11 @@
                 <span class="tab-param-text">Rerun list file:</span>
                 <button type="button" id="rerunExportBtn" class="import-status-refresh" data-tip="Download this list (types, notes, tags) as JSON. It links to experiments by id, so import it alongside the same data.">Export JSON</button>
                 <span class="tab-param-text">·</span>
-                <button type="button" id="rerunImportBtn" class="import-status-refresh" data-tip="Add the entries from a rerun list file to this list. Entries for experiments not in the loaded data are skipped.">Import JSON</button>
+                <button type="button" id="rerunImportBtn" class="import-status-refresh" data-tip="Add the entries from a rerun list file to this list. Entries for experiments not loaded right now are kept, and show once that data is loaded.">Import JSON</button>
                 <input type="file" id="rerunImportInput" accept=".json,application/json" hidden>
+                <span class="tab-param-text">·</span>
+                <button type="button" id="rerunClearBtn" class="import-status-refresh rerun-clear-btn" data-tip="Remove every rerun shown here, with its notes, tags and type. Reruns saved for other data are kept.">Clear list</button>
+                <span id="rerunHiddenNote" class="rerun-hidden-note"></span>
             </div>
         </div>
 
@@ -604,7 +621,10 @@
             page:        { icon: 'iconPage.png',        label: 'Page visit' },
             interaction: { icon: 'iconInteraction.png', label: 'Interaction' },
             segment:     { icon: 'iconSegment.png',     label: 'Segment' },
-            device:      { icon: 'iconDevice.png',      label: 'Device' }
+            device:      { icon: 'iconDevice.png',      label: 'Device' },
+            // Exposed wherever the code checks a feature flag: not tied to
+            // a page (PostHog's default exposure, for instance).
+            flag:        { icon: 'iconFlag.svg',        label: 'Feature flag: exposed wherever the code checks it, not tied to a page' }
         };
 
         // The trigger's types in canonical (TRIGGER_TYPES) order, ignoring input order.
@@ -1078,7 +1098,7 @@
             updateMethodNote();
             view.rows = buildViewRows(calculatedExperimentsData);
             view.page = 0;
-            pruneRerunSelectionsToDataset();
+            syncRerunEntriesToDataset();
             const activeTab = document.querySelector('.tab.active');
             if (activeTab) {
                 updateHighlighting(activeTab.dataset.tab, { keepSort: keepPage });
@@ -1336,9 +1356,9 @@
                 params: {
                     maxEffect: { value: 0, step: 0.5, suffix: '%' },
                     pMax: { value: 0.05, step: 0.01, min: 0, max: 1 },
-                    // A clear loser that was (rightly) not shipped is the one
-                    // worth inverting; a shipped loser is a different problem.
-                    decisionFilter: { value: 'Not Shipped', options: ['Not Shipped', 'Shipped', 'Either'] }
+                    // A clear loser is worth inverting whatever was decided:
+                    // shipped or not, the inverse idea is still untested.
+                    decisionFilter: { value: 'Either', options: ['Either', 'Not Shipped', 'Shipped'] }
                 },
                 template: p => [
                     'Highlight when', { param: 'decisionFilter' },
@@ -1367,7 +1387,17 @@
         // again as an intensified variant, say), so each entry is an instance
         // with its own `id`; `key` is the row's selection key, linking the entry
         // back to its experiment or comparison. Kept in the order they were added.
+        // `name` is the experiment's name when the entry was saved: together
+        // with `key` it says which dataset the entry belongs to (see
+        // syncRerunEntriesToDataset).
         let rerunInstances = [];
+
+        // Entries whose experiment isn't in the data loaded right now (another
+        // dataset, say, or before an import has restored). Kept, with their
+        // details, and moved back into rerunInstances once that data loads
+        // again -- switching data must never delete someone's rerun list.
+        // Each is { id, key, name, ...details } with tags as an array.
+        let hiddenReruns = [];
 
         // Rows whose rerun panel is open but not yet added to the list, by
         // selection key. Opening the panel commits nothing: only its Rerun button
@@ -1969,11 +1999,12 @@
         // the app being stuck or broken rather than as a restored draft.
         function saveRerunSelection() {
             writeStored(RERUN_SELECTION_KEY, JSON.stringify({
-                instances: rerunInstances.map(({ id, key }) => {
+                instances: rerunInstances.map(({ id, key, name }) => {
                     const record = detailFor(id);
                     // Sets do not survive JSON, so tags travel as an array.
-                    return { id, key, ...record, tags: record.tags ? Array.from(record.tags) : undefined };
-                })
+                    return { id, key, name, ...record, tags: record.tags ? Array.from(record.tags) : undefined };
+                }),
+                hidden: hiddenReruns
             }));
         }
 
@@ -1983,12 +2014,16 @@
             try {
                 const saved = JSON.parse(raw);
                 if (Array.isArray(saved.instances)) {
-                    saved.instances.forEach(({ id, key, tags, ...record }) => {
+                    saved.instances.forEach(({ id, key, name, tags, ...record }) => {
                         if (!key) return;
                         const instanceId = id || newRerunInstanceId();
-                        rerunInstances.push({ id: instanceId, key });
+                        rerunInstances.push({ id: instanceId, key, name });
                         updateDetail(instanceId, { ...record, tags: tags ? new Set(tags) : undefined });
                     });
+                    hiddenReruns = Array.isArray(saved.hidden)
+                        ? saved.hidden.filter(entry => entry && entry.key && entry.id)
+                        : [];
+                    syncCompoundGroupCounter();
                     return;
                 }
 
@@ -2011,6 +2046,18 @@
             } catch (e) {
                 // Corrupt/unreadable saved selection — start fresh.
             }
+        }
+
+        // Compound group ids ("cg0", "cg1", ...) come from a counter that starts
+        // at 0 each page load. Saved entries -- shown or hidden -- may already
+        // use some, so start past the highest, or a new group would silently
+        // merge with an old one of the same id.
+        function syncCompoundGroupCounter() {
+            const used = [
+                ...Array.from(rerunDetails.values()).map(r => r.compoundGroup),
+                ...hiddenReruns.map(entry => entry.compoundGroup)
+            ].map(g => /^cg(\d+)$/.exec(g || '')?.[1]).filter(Boolean).map(Number);
+            compoundGroupCounter = Math.max(compoundGroupCounter, ...used.map(n => n + 1));
         }
 
         loadRerunSelection();
@@ -2245,14 +2292,40 @@
             }
         }
 
-        // Prunes against the whole dataset, not the rendered page. Pruning to
-        // rendered rows would silently drop every selection that happens to be
-        // on another page once the table is paginated.
-        function pruneRerunSelectionsToDataset() {
+        // Checks against the whole dataset, not the rendered page, or every
+        // entry on another page of a paginated table would look missing.
+        //
+        // Entries whose experiment isn't loaded are hidden, never deleted: they
+        // move to hiddenReruns (details included) and come back when their data
+        // loads again. An entry belongs to the loaded data when its key is
+        // there and, if it recorded one, the experiment's name matches too --
+        // so another dataset reusing an id (the demo data and a client both
+        // having "exp_checkout_flow", say) can't claim it.
+        function syncRerunEntriesToDataset() {
             const datasetKeys = new Set(
                 view.rows.map(viewRow => viewRow.selectionKey).filter(Boolean)
             );
-            rerunInstances = rerunInstances.filter(inst => datasetKeys.has(inst.key));
+            const names = new Map(calculatedExperimentsData.map(e => [experimentSelectionKey(e), e.name || '']));
+            const nameFor = key => names.get(key.split('::')[0]) ?? '';
+            const belongs = entry => datasetKeys.has(entry.key) && (!entry.name || entry.name === nameFor(entry.key));
+
+            const shown = [];
+            rerunInstances.forEach(inst => {
+                if (belongs(inst)) { shown.push(inst); return; }
+                const { tags, ...record } = detailFor(inst.id);
+                hiddenReruns.push({ ...inst, ...record, tags: tags ? Array.from(tags) : undefined });
+                rerunDetails.delete(inst.id);
+            });
+            hiddenReruns = hiddenReruns.filter(entry => {
+                if (!belongs(entry)) return true;
+                const { id, key, name, tags, ...record } = entry;
+                shown.push({ id, key, name });
+                updateDetail(id, { ...record, tags: tags ? new Set(tags) : undefined });
+                return false;
+            });
+            // Entries saved before names were recorded adopt the current one.
+            shown.forEach(inst => { if (!inst.name) inst.name = nameFor(inst.key); });
+            rerunInstances = shown;
             Array.from(openRerunDrafts).forEach(key => {
                 if (!datasetKeys.has(key)) openRerunDrafts.delete(key);
             });
@@ -2265,6 +2338,7 @@
                 if (!live) rerunDetails.delete(entryKey);
             });
             saveRerunSelection();
+            updateRerunHiddenNote();
         }
 
         function setRowDataset(row, item, overrides = {}) {
@@ -2316,14 +2390,19 @@
                 ? `<a href="#" class="owner-link">${item.owner}</a>`
                 : emptyCell();
             const reach = displayValue(item.traffic, '%');
+            // What the % is out of: "of traffic" unless the mapper says
+            // (e.g. PostHog's "of site visitors", or "rollout" when only the
+            // flag's rollout is known), with its working in the tooltip.
+            const reachLabel = item.reachLabel || 'of traffic';
+            const reachTip = item.reachNote ? ` data-tip="${escapeAttr(item.reachNote)}"` : '';
             return `
                 <td class="col-trigger triggered">${renderTriggerIcons(item.triggered)}</td>
                 <td class="col-reach">
-                    <div class="traffic-container">
+                    <div class="traffic-container"${reachTip}>
                         <div class="traffic-bar-wrapper">
                             <div class="traffic-bar${trafficBarClass(item.traffic)}" style="width: ${item.traffic || 0}%; opacity: ${trafficOpacity(item.traffic)};"></div>
                         </div>
-                        <span class="traffic-subtitle">${reach ? `${reach} of traffic` : ''}</span>
+                        <span class="traffic-subtitle">${reach ? `${reach} ${reachLabel}` : ''}</span>
                     </div>
                 </td>
                 <td class="col-iteration">${renderIterationDots(item.iterations)}</td>
@@ -2924,6 +3003,11 @@
                 label: 'Amplitude',
                 endpoint: 'https://experiment.amplitude.com/api/1/experiments',
                 mapper: AmplitudeMapper
+            },
+            posthog: {
+                label: 'PostHog',
+                endpoint: 'https://us.posthog.com/api/projects/@current/experiments/',
+                mapper: PostHogMapper
             }
         };
 
@@ -3003,10 +3087,6 @@
         }
 
         const IDB_IMPORT_KEY = 'lastImportMappedData';
-        const IDB_GROWTHBOOK_KEY = 'growthbookRawCache';
-
-        const CACHE_KEY = 'growthbook_experiments_cache';
-        const CACHE_TIMESTAMP_KEY = 'growthbook_experiments_cache_timestamp';
 
         // Import persistence keys
         const IMPORT_PLATFORM_KEY = 'last_import_platform';
@@ -3022,20 +3102,45 @@
         const cancelBtn = document.getElementById('cancelBtn');
         const okBtn = document.getElementById('okBtn');
 
+        // Whether the saved import is the one showing ('1') or set aside for
+        // Dummy Data ('0'). The last import is kept either way, as a backup:
+        // switching back to it costs no calls to the platform.
+        const IMPORT_ACTIVE_KEY = 'last_import_active';
+
+        // True while the dialog was opened over an import (clicking "Import"
+        // while on it), which should stay if the dialog is cancelled.
+        let dialogOverImport = false;
+
+        // The toggle shows what is on screen, so it only switches to Import
+        // once the dialog's OK has a valid choice to load (see okBtn); until
+        // then it stays as it was (off, or on when opened over an import).
+        function openImportDialog({ overImport = false } = {}) {
+            dialogOverImport = overImport;
+            dataSourceToggle.checked = overImport;
+            prefillImportDialog();
+            modal.classList.add('show');
+        }
+
+        // "Import" while already on Import opens the dialog to pick another
+        // source rather than flipping back to Dummy Data; the switch itself
+        // and "Dummy Data" still toggle. Off, it toggles as usual.
+        document.getElementById('importToggleText').addEventListener('click', event => {
+            if (!dataSourceToggle.checked) return;
+            event.preventDefault();
+            openImportDialog({ overImport: true });
+        });
+
         dataSourceToggle.addEventListener('change', function() {
             if (this.checked) {
-                // Show modal when switching to API
-                prefillImportDialog();
-                modal.classList.add('show');
+                // Always ask, with the saved source preselected: OK on it
+                // brings the backup back with no calls (see okBtn).
+                openImportDialog();
             } else {
-                // Switch back to dummy data — clear ALL caches
+                // To Dummy Data: the import stays saved as the backup.
+                localStorage.setItem(IMPORT_ACTIVE_KEY, '0');
                 setImportStatus('');
                 isUsingApiData = false;
                 initialDataLoaded = false;
-                clearImportConfig();
-                // Also clear GrowthBook API cache
-                localStorage.removeItem(CACHE_KEY);
-                localStorage.removeItem(CACHE_TIMESTAMP_KEY);
                 loadData(true);
             }
         });
@@ -3063,8 +3168,17 @@
         const API_KEY_HINTS = {
             growthbook: 'A read-only GrowthBook API secret key (Settings → API Keys).',
             amplitude: 'Management API key (Settings → Organization settings → API keys). '
-                + 'Used to list your experiments.'
+                + 'Used to list your experiments.',
+            posthog: 'A personal API key (Settings → Personal API keys) with the read scopes '
+                + 'experiment:read and query:read (plus project:read to find the project by itself).'
         };
+
+        // Which PostHog project to read. Not sensitive, so it is remembered
+        // in localStorage alongside the platform choice.
+        const POSTHOG_PROJECT_KEY = 'import_posthog_project';
+        const posthogProjectGroup = document.getElementById('posthogProjectGroup');
+        const posthogProjectInput = document.getElementById('posthogProjectInput');
+        try { posthogProjectInput.value = localStorage.getItem(POSTHOG_PROJECT_KEY) || ''; } catch (e) { /* blocked */ }
         const apiKeyHint = document.getElementById('apiKeyHint');
 
         // Dialog memory, kept apart from the import cache so switching to dummy
@@ -3097,8 +3211,21 @@
             }
         }
 
+        // Under the platforms: what OK does when the chosen one is the saved
+        // import (brings it back, no calls). Empty otherwise.
+        function updateSavedImportHint(platform) {
+            const hint = document.getElementById('savedImportHint');
+            const saved = localStorage.getItem(IMPORT_PLATFORM_KEY);
+            const timestamp = Number(localStorage.getItem(IMPORT_TIMESTAMP_KEY));
+            hint.textContent = saved && saved === platform
+                ? `Saved import${timestamp ? ` from ${shortTime(timestamp)}` : ''}: OK brings it back without new calls`
+                    + (platform === 'csv' || platform === 'local-json' ? ' (or pick a new file)' : '') + '.'
+                : '';
+        }
+
         // Fill the key field for a platform and explain where the value came from.
         function showPlatformFields(platform) {
+            updateSavedImportHint(platform);
             if (platform === 'csv') {
                 apiKeyGroup.style.display = 'none';
                 csvFileGroup.style.display = 'block';
@@ -3117,6 +3244,7 @@
 
             amplitudeResultsGroup.style.display = platform === 'amplitude' ? 'block' : 'none';
             if (platform === 'amplitude') updateAmplitudeSignInStatus();
+            posthogProjectGroup.style.display = platform === 'posthog' ? 'block' : 'none';
 
             const savedKey = rememberedApiKey(platform);
             apiKeyInput.value = savedKey;
@@ -3166,8 +3294,9 @@
         function prefillImportDialog() {
             let platform = null;
             try {
-                platform = localStorage.getItem(DIALOG_PLATFORM_KEY)
-                    || localStorage.getItem(IMPORT_PLATFORM_KEY);
+                // The saved import first, so OK brings it back by default.
+                platform = localStorage.getItem(IMPORT_PLATFORM_KEY)
+                    || localStorage.getItem(DIALOG_PLATFORM_KEY);
             } catch (e) { /* storage blocked: open blank */ }
             const radio = platform && document.querySelector(`input[name="platform"][value="${platform}"]`);
             if (!radio) return;
@@ -3183,9 +3312,11 @@
         });
 
         cancelBtn.addEventListener('click', function() {
-            // Close modal and revert toggle
+            // Close modal and revert toggle, unless it was opened over an
+            // import (clicking "Import" while on it): that import stays on screen.
             modal.classList.remove('show');
-            dataSourceToggle.checked = false;
+            dataSourceToggle.checked = dialogOverImport;
+            dialogOverImport = false;
             // Clear radio buttons
             document.querySelectorAll('input[name="platform"]').forEach(radio => {
                 radio.checked = false;
@@ -3205,7 +3336,7 @@
             }
         });
 
-        okBtn.addEventListener('click', function() {
+        okBtn.addEventListener('click', async function() {
             // Get selected platform from radio buttons
             const selectedPlatform = document.querySelector('input[name="platform"]:checked');
             const platform = selectedPlatform ? selectedPlatform.value : '';
@@ -3213,6 +3344,28 @@
             if (!platform) {
                 alert('Please select a platform');
                 return;
+            }
+
+            // The saved import's own source chosen again (same PostHog
+            // project, no new file picked): bring the backup back with no
+            // calls. Refresh in the status line then fetches anything new.
+            const newFile = (platform === 'csv' && csvFileInput.files[0])
+                || (platform === 'local-json' && localJsonFileInput.files[0]);
+            const sameProject = platform !== 'posthog'
+                || (localStorage.getItem(POSTHOG_PROJECT_KEY) || '') === posthogProjectInput.value.trim();
+            if (localStorage.getItem(IMPORT_PLATFORM_KEY) === platform && sameProject && !newFile) {
+                // A key typed now replaces the remembered one, for Refresh.
+                if (apiKeyInput.value) {
+                    rememberDialogChoice(platform, apiKeyInput.value);
+                    sessionStorage.setItem(IMPORT_API_KEY_KEY, apiKeyInput.value);
+                }
+                localStorage.setItem(IMPORT_ACTIVE_KEY, '1');
+                if (await loadFromImportCache()) {
+                    modal.classList.remove('show');
+                    dialogOverImport = false;
+                    return;
+                }
+                // Nothing usable saved: carry on with a normal import.
             }
 
             if (platform === 'csv') {
@@ -3245,7 +3398,9 @@
                     console.log('Convert CSV Import:', parsedData);
 
                     if (parsedData.length > 0) {
+                        dataSourceToggle.checked = true;
                         refreshUI(parsedData);
+                        setImportStatus('Loaded Convert CSV');
 
                         // Persist in the background: the table is already correct,
                         // and saveImportConfig reports a failed save itself.
@@ -3293,6 +3448,7 @@
                     }
 
                     rememberDialogChoice('local-json');
+                    dataSourceToggle.checked = true;
                     refreshUI(parsedData);
                     setImportStatus(`Loaded ${file.name}`);
 
@@ -3317,16 +3473,28 @@
                     return;
                 }
 
+                // Valid choice: the toggle switches to Import now. A failed
+                // fetch switches it back (see listingFailed).
+                dataSourceToggle.checked = true;
+
                 // Save configuration
                 apiConfig.platform = platform;
                 apiConfig.apiKey = apiKey;
                 isUsingApiData = true;
                 rememberDialogChoice(platform, apiKey);
 
-                // Persist import for reload. A previous import's cached rows
-                // must not be restored as this platform's data.
-                idbDelete(IDB_IMPORT_KEY).catch(() => {});
-                localStorage.removeItem(IMPORT_MAPPED_DATA_KEY);
+                // Persist import for reload. Importing the source that is
+                // already saved keeps its results, so only new or changed
+                // experiments are fetched; another source's saved rows must
+                // not be restored as this platform's data, so they go.
+                const sameSource = localStorage.getItem(IMPORT_PLATFORM_KEY) === platform
+                    && (platform !== 'posthog'
+                        || (localStorage.getItem(POSTHOG_PROJECT_KEY) || '') === posthogProjectInput.value.trim());
+                if (!sameSource) {
+                    idbDelete(IDB_IMPORT_KEY).catch(() => {});
+                    localStorage.removeItem(IMPORT_MAPPED_DATA_KEY);
+                }
+                dialogOverImport = false;
                 saveImportConfig(platform, { apiKey })
                     .catch(error => console.error('Could not persist import config:', error));
 
@@ -3338,6 +3506,9 @@
                     fetchGrowthBookData(apiKey);
                 } else if (platform === 'amplitude') {
                     fetchAmplitudeData(apiKey);
+                } else if (platform === 'posthog') {
+                    try { localStorage.setItem(POSTHOG_PROJECT_KEY, posthogProjectInput.value.trim()); } catch (e) { /* blocked */ }
+                    fetchPostHogData(apiKey);
                 } else {
                     loadData(true);
                 }
@@ -3465,6 +3636,7 @@
 
             try {
                 localStorage.setItem(IMPORT_PLATFORM_KEY, platform);
+                localStorage.setItem(IMPORT_ACTIVE_KEY, '1');
                 localStorage.setItem(IMPORT_TIMESTAMP_KEY, Date.now().toString());
                 if (opts.accountId) localStorage.setItem(IMPORT_ACCOUNT_ID_KEY, opts.accountId);
                 if (opts.fileName) {
@@ -3501,6 +3673,7 @@
         // gone by the time it returns.
         function clearImportConfig() {
             localStorage.removeItem(IMPORT_PLATFORM_KEY);
+            localStorage.removeItem(IMPORT_ACTIVE_KEY);
             localStorage.removeItem(IMPORT_ACCOUNT_ID_KEY);
             localStorage.removeItem(IMPORT_API_KEY_KEY);
             localStorage.removeItem(IMPORT_TIMESTAMP_KEY);
@@ -3514,28 +3687,60 @@
             });
         }
 
-        // Fetch GrowthBook data using proper mapper (shared by modal import + cache restore)
-        async function fetchGrowthBookData(apiKey, apiHost) {
-            const host = apiHost || 'https://api.growthbook.io';
-            try {
-                const filteredExperiments = await GrowthBookMapper.fetchExperiments(host, apiKey);
+        // GrowthBook: same flow as PostHog and Amplitude. The raw experiments
+        // (with `detailedResults`) go in the shared import cache.
+        const GROWTHBOOK_HOST = 'https://api.growthbook.io';
 
-                // Save to cache for reload persistence (background; saveToCache
-                // reports a failed save itself).
-                saveToCache(filteredExperiments)
-                    .catch(error => console.error('Could not cache GrowthBook data:', error));
+        function showGrowthBookStatus(experiments) {
+            showResultsStatus('GrowthBook', experiments, {
+                refresh: apiKey => fetchGrowthBookData(apiKey),
+                repull: apiKey => fetchGrowthBookData(apiKey, { force: true })
+            });
+        }
 
-                const mappedExperiments = GrowthBookMapper.mapExperiments(filteredExperiments);
-                refreshUI(mappedExperiments);
-                console.log('GrowthBook Experiments (Mapped):', mappedExperiments.length, 'experiments');
-            } catch (error) {
-                console.error('GrowthBook API Error:', error);
-                alert(`Failed to fetch GrowthBook data: ${error.message}\nFalling back to dummy data.`);
-                dataSourceToggle.checked = false;
-                isUsingApiData = false;
-                clearImportConfig();
-                loadData(true);
+        async function fetchGrowthBookResults(apiKey, experiments, targets) {
+            const save = data => saveImportConfig('growthbook', { apiKey, mappedData: data });
+            if (targets.length) {
+                await fetchResultsResumably(experiments, targets, {
+                    fetchOne: exp => GrowthBookMapper.fetchOne(exp, GROWTHBOOK_HOST, apiKey),
+                    map: data => GrowthBookMapper.mapExperiments(data),
+                    save
+                });
+                alertIfNoResults('GrowthBook', experiments);
+            } else {
+                await save(experiments);
             }
+            showGrowthBookStatus(experiments);
+        }
+
+        // Lists the experiments, keeps saved results that are still current,
+        // and fetches the rest (all of them with `force`: Re-pull all).
+        async function fetchGrowthBookData(apiKey, { force = false } = {}) {
+            setImportStatus('Loading experiments…');
+            let experiments;
+            try {
+                const fresh = await GrowthBookMapper.fetchExperiments(GROWTHBOOK_HOST, apiKey);
+                const stored = await readStoredImportData();
+                const saved = isGrowthBookRaw(stored) ? stored : [];
+                experiments = ResumableResults.merge(fresh, saved, {
+                    idOf: exp => exp.id || exp.experimentId || exp.key,
+                    changed: (now, before) => GrowthBookMapper.changed(now, before)
+                });
+                refreshUI(GrowthBookMapper.mapExperiments(experiments));
+            } catch (error) {
+                await listingFailed('GrowthBook', error, '', isGrowthBookRaw, saved => {
+                    refreshUI(GrowthBookMapper.mapExperiments(saved));
+                    showGrowthBookStatus(saved);
+                });
+                return;
+            }
+            await fetchGrowthBookResults(apiKey, experiments, ResumableResults.pending(experiments, { force }));
+        }
+
+        // Raw GrowthBook experiments, not mapped rows from an older cache.
+        function isGrowthBookRaw(stored) {
+            const first = stored?.[0];
+            return !!first && ('phases' in first || 'variations' in first || 'resultsStatus' in first);
         }
 
         // Fetch Amplitude experiments (shared by modal import + reload restore).
@@ -3550,15 +3755,15 @@
 
         const importStatus = document.getElementById('importStatus');
 
-        // Status text under the Import toggle, optionally with links to load
-        // more Amplitude experiments or re-pull them instead of using the cache.
-        // `more` is how many a Load more link would add, or true when that is
-        // not known yet. Links go on their own line under the text.
-        function setImportStatus(text, { refresh = false, more = 0 } = {}) {
+        // Status text under the Import toggle, with optional links on the same
+        // line after it: [{ label, onClick(apiKey) }]. Each link needs the
+        // tab's API key; without one (a new tab) it says to re-enter it.
+        function setImportStatus(text, links = []) {
             importStatus.textContent = text;
-            const links = document.createElement('div');
-            links.className = 'import-status-links';
-            const addLink = (label, onClick) => {
+            if (!links.length) return;
+            const row = document.createElement('span');
+            row.className = 'import-status-links';
+            links.forEach(({ label, onClick }, i) => {
                 const button = document.createElement('button');
                 button.type = 'button';
                 button.className = 'import-status-refresh';
@@ -3566,13 +3771,90 @@
                 button.addEventListener('click', () => {
                     const apiKey = getSavedApiKey();
                     if (apiKey) onClick(apiKey);
+                    else alert('The API key is kept only while the tab is open. Enter it again under Import.');
                 });
-                if (links.childNodes.length) links.append(' · ');
-                links.append(button);
-            };
-            if (more) addLink(more === true ? 'Load more' : `Load ${more} more`, loadMoreAmplitude);
-            if (refresh) addLink('Refresh', apiKey => fetchAmplitudeData(apiKey, amplitudeLoaded.length));
-            if (links.childNodes.length) importStatus.append(links);
+                if (i) row.append(' · ');
+                row.append(button);
+            });
+            importStatus.append(' · ', row);
+        }
+
+        // ---- Resumable results (all API imports) ------------------------------
+        // ResumableResults (mappers/resumable-results.js) fetches each
+        // experiment's results as one unit and saves as it goes; these helpers
+        // add the drawing and the status line every platform shares.
+
+        // Fetches `targets` (members of `experiments`), redrawing as results
+        // arrive (at most every half second) and saving via `save`.
+        async function fetchResultsResumably(experiments, targets, { fetchOne, map, save }) {
+            let lastDraw = 0;
+            const outcome = await ResumableResults.run(experiments, targets, {
+                fetchOne,
+                save,
+                onProgress: (done, total) => {
+                    setImportStatus(`Loading results ${done}/${total}…`);
+                    const now = performance.now();
+                    if (now - lastDraw < 500) return;
+                    lastDraw = now;
+                    refreshUI(map(experiments), { keepPage: true });
+                }
+            });
+            refreshUI(map(experiments), { keepPage: true });
+            return outcome;
+        }
+
+        const hasResults = exp => !!exp._fetchedAt && !exp._issue;
+
+        // Listing the experiments failed. With this platform's results saved
+        // (a Refresh, or a re-import of the same source) they stay on screen
+        // via `showSaved`: a dropped connection must not cost the backup.
+        // With nothing saved, fall back to the dummy data.
+        async function listingFailed(label, error, hint, isOwnSaved, showSaved) {
+            console.error(`${label} API Error:`, error);
+            const stored = await readStoredImportData();
+            if (isOwnSaved(stored)) {
+                alert(`Could not reach ${label}: ${error.message}${hint}\nShowing the saved results instead.`);
+                showSaved(stored);
+                return;
+            }
+            alert(`Failed to fetch ${label} data: ${error.message}${hint}\nFalling back to dummy data.`);
+            dataSourceToggle.checked = false;
+            isUsingApiData = false;
+            clearImportConfig();
+            setImportStatus('');
+            loadData(true);
+        }
+
+        // After a fetch: when not one experiment has results, say why (the
+        // table alone would just show empty rows). `hint(issues)` may add a
+        // platform-specific line.
+        function alertIfNoResults(label, experiments, hint = () => '') {
+            if (!experiments.length || experiments.some(hasResults)) return;
+            const issues = ResumableResults.summarize(experiments);
+            alert(`Loaded ${experiments.length} ${label} experiments, but none of their results:\n\n${issues}`
+                + (hint(issues) ? `\n\n${hint(issues)}` : ''));
+        }
+
+        function shortTime(ms) {
+            return new Date(ms).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+        }
+
+        // "PostHog results 38/40 · 2 to retry · Nov 19, 9:42 AM" with Refresh
+        // (fetch what is new or changed) and Re-pull all (fetch everything).
+        // `asOf` is the oldest fetch among the experiments shown.
+        function showResultsStatus(label, experiments, { refresh, repull, extra = '', links = [] }) {
+            const analyzed = experiments.filter(hasResults).length;
+            const retry = ResumableResults.pending(experiments).length;
+            const fetchedAt = experiments.map(exp => exp._fetchedAt).filter(Boolean);
+            const asOf = fetchedAt.length ? shortTime(Math.min(...fetchedAt)) : '';
+            setImportStatus(
+                [`${label} results ${analyzed}/${experiments.length}`, retry ? `${retry} to retry` : '', extra, asOf]
+                    .filter(Boolean).join(' · '),
+                links.concat([
+                    { label: retry ? 'Retry' : 'Refresh', onClick: refresh },
+                    { label: 'Re-pull all', onClick: repull }
+                ])
+            );
         }
 
         // Each analyze call is one Amplitude query, so imports take the newest
@@ -3595,21 +3877,20 @@
             return amplitudeAll.filter(exp => !loadedIds.has(exp.id));
         }
 
-        // Status after a load: how many have results, plus a Load more link
-        // while older experiments remain (or may remain, after a cache restore).
-        // `asOf` labels results restored from the cache with their date.
-        function showAmplitudeStatus(asOf = '') {
-            const analyzed = amplitudeLoaded.filter(exp => exp.analysis).length;
+        // Status after a load, plus a Load more link while older experiments
+        // remain (or may remain, after a cache restore).
+        function showAmplitudeStatus() {
             // After a cache restore the full list is not fetched yet, so how
             // many remain is unknown: offer a plain "Load more".
             const remaining = amplitudeAll ? unloadedAmplitude().length : null;
-            const total = remaining > 0 ? ` of ${amplitudeAll.length}` : '';
             const more = remaining === null ? true
                 : remaining > 0 ? Math.min(remaining, nextAmplitudeBatch(amplitudeLoaded.length)) : 0;
-            setImportStatus(
-                `Results ${analyzed}/${amplitudeLoaded.length}${total}${asOf ? ` · ${asOf}` : ''}`,
-                { refresh: true, more }
-            );
+            showResultsStatus('Amplitude', amplitudeLoaded, {
+                extra: remaining > 0 ? `${amplitudeAll.length} in Amplitude` : '',
+                links: more ? [{ label: more === true ? 'Load more' : `Load ${more} more`, onClick: loadMoreAmplitude }] : [],
+                refresh: apiKey => fetchAmplitudeData(apiKey),
+                repull: apiKey => fetchAmplitudeData(apiKey, { force: true })
+            });
         }
 
         // Adds the next batch of older experiments below the ones shown,
@@ -3627,76 +3908,153 @@
                 return;
             }
             // Match by id: after a cache restore the fresh list may have new
-            // experiments at the top, so positions no longer line up.
+            // experiments at the top, so positions no longer line up. Pushed
+            // in place: a results run in progress holds this same array.
             const batch = unloadedAmplitude().slice(0, nextAmplitudeBatch(amplitudeLoaded.length));
-            amplitudeLoaded = amplitudeLoaded.concat(batch);
+            amplitudeLoaded.push(...batch);
             refreshUI(AmplitudeMapper.mapExperiments(amplitudeLoaded));
             await fetchAmplitudeResults(apiKey, batch);
         }
 
-        // Fetches the list and, when signed in, one analyze call per
-        // experiment for the newest `count` of them. Results are cached (see
-        // loadFromImportCache), so this runs on import, sign-in, Refresh and
-        // Load more -- not on every page load.
-        async function fetchAmplitudeData(apiKey, count = 0) {
+        // Lists the experiments and fetches results for the newest ones
+        // shown (as many as before, at least the first batch), keeping saved
+        // results that are still current; `force` (Re-pull all) fetches
+        // them all again. Runs on import, sign-in, Refresh -- not on reload.
+        async function fetchAmplitudeData(apiKey, { force = false } = {}) {
             setImportStatus('Loading experiments…');
             try {
                 amplitudeAll = AmplitudeMapper.newestFirst(await AmplitudeMapper.fetchExperiments(null, apiKey));
-                amplitudeLoaded = amplitudeAll.slice(0, count || AMPLITUDE_BATCHES[0]);
+                const stored = await readStoredImportData();
+                const saved = stored?.[0]?.variants ? stored : [];
+                const count = Math.max(saved.length, AMPLITUDE_BATCHES[0]);
+                amplitudeLoaded = ResumableResults.merge(amplitudeAll.slice(0, count), saved, {
+                    changed: (now, before) => AmplitudeMapper.changed(now, before)
+                });
                 const mappedExperiments = AmplitudeMapper.mapExperiments(amplitudeLoaded);
                 refreshUI(mappedExperiments);
                 console.log('Amplitude Experiments (Mapped):', mappedExperiments.length, 'of', amplitudeAll.length, 'experiments');
             } catch (error) {
-                console.error('Amplitude API Error:', error);
                 const hint = error.status === 401
                     ? '\nCheck that this is a Management API key (Settings > Organization settings > API keys).'
                     : '';
-                alert(`Failed to fetch Amplitude data: ${error.message}${hint}\nFalling back to dummy data.`);
-                dataSourceToggle.checked = false;
-                isUsingApiData = false;
-                clearImportConfig();
-                setImportStatus('');
-                loadData(true);
+                await listingFailed('Amplitude', error, hint, stored => !!stored?.[0]?.variants, saved => {
+                    amplitudeLoaded = saved;
+                    amplitudeAll = null;
+                    refreshUI(AmplitudeMapper.mapExperiments(saved));
+                    showAmplitudeStatus();
+                });
                 return;
             }
 
-            await fetchAmplitudeResults(apiKey, amplitudeLoaded);
+            await fetchAmplitudeResults(apiKey, ResumableResults.pending(amplitudeLoaded, { force }));
         }
 
-        // Analyzes `experiments` (all or part of amplitudeLoaded) and redraws.
-        // Results are optional: the experiment list stays on screen if they fail.
-        async function fetchAmplitudeResults(apiKey, experiments) {
+        // Analyzes `targets` (members of amplitudeLoaded) and redraws. The
+        // raw experiments are saved as results arrive (not the mapped rows,
+        // so mapper changes apply on reload). Results are optional: the
+        // experiment list stays on screen without a sign-in.
+        async function fetchAmplitudeResults(apiKey, targets) {
+            const save = data => saveImportConfig('amplitude', { apiKey, mappedData: data });
+            if (!targets.length) {
+                await save(amplitudeLoaded);
+                showAmplitudeStatus();
+                return;
+            }
             await amplitudeSignIn;
             if (!AmplitudeMapper.mcp.isSignedIn()) {
+                await save(amplitudeLoaded);
                 setImportStatus('Sign in via Import for results');
                 return;
             }
             try {
-                // Redraw as results arrive, at most every half second, so rows
-                // fill in gradually without re-rendering on every call.
-                let lastDraw = 0;
-                const analyzed = await AmplitudeMapper.fetchResults(experiments, (done, total) => {
-                    setImportStatus(`Loading results ${done}/${total}…`);
-                    const now = performance.now();
-                    if (now - lastDraw < 500) return;
-                    lastDraw = now;
-                    refreshUI(AmplitudeMapper.mapExperiments(amplitudeLoaded), { keepPage: true });
-                });
-                refreshUI(AmplitudeMapper.mapExperiments(amplitudeLoaded), { keepPage: true });
-                showAmplitudeStatus();
-                console.log('Amplitude results attached:', analyzed, 'of', experiments.length, 'experiments');
-                // Cache only a useful result, so a failed run is retried on
-                // the next load rather than remembered. The raw experiments are
-                // cached (not the mapped rows) so mapper changes apply on reload.
-                if (amplitudeLoaded.some(exp => exp.analysis)) {
-                    saveImportConfig('amplitude', { apiKey, mappedData: amplitudeLoaded })
-                        .catch(error => console.error('Could not cache Amplitude results:', error));
-                }
+                await AmplitudeMapper.prepare(targets);
             } catch (error) {
                 console.error('Amplitude results error:', error);
-                setImportStatus('Results failed', { refresh: true });
+                showAmplitudeStatus();
                 alert(`Loaded the experiments, but not their results: ${error.message}`);
+                return;
             }
+            await fetchResultsResumably(amplitudeLoaded, targets, {
+                fetchOne: exp => AmplitudeMapper.fetchOne(exp),
+                map: data => AmplitudeMapper.mapExperiments(data),
+                save
+            });
+            showAmplitudeStatus();
+            alertIfNoResults('Amplitude', amplitudeLoaded);
+        }
+
+        // PostHog: the raw experiments are cached (not the mapped rows, so
+        // mapper changes apply on reload) and a reload makes no calls except
+        // to finish experiments an earlier load did not get to.
+        function showPostHogStatus(all) {
+            // Counted like the table: finished experiments only.
+            const experiments = all.filter(exp => PostHogMapper.isFinished(exp));
+            // Name the project when Rerun had to find it, so a wrong pick shows.
+            const listing = PostHogMapper.lastListing;
+            showResultsStatus('PostHog', experiments, {
+                extra: listing?.discovery === 'found' ? listing.projectName || `project ${listing.project}` : '',
+                refresh: apiKey => fetchPostHogData(apiKey),
+                repull: apiKey => fetchPostHogData(apiKey, { force: true })
+            });
+        }
+
+        // Fetches results for `targets` (or, with none, just saves the list)
+        // and reports. The alert only fires when nothing at all has results.
+        async function fetchPostHogResults(apiKey, experiments, targets) {
+            const save = data => saveImportConfig('posthog', { apiKey, mappedData: data });
+            if (targets.length) {
+                await fetchResultsResumably(experiments, targets, {
+                    fetchOne: exp => PostHogMapper.fetchOne(exp, apiKey),
+                    map: data => PostHogMapper.mapExperiments(data),
+                    save
+                });
+            } else {
+                await save(experiments);
+            }
+            showPostHogStatus(experiments);
+            if (targets.length) {
+                alertIfNoResults('PostHog', experiments, issues => /403/.test(issues) && !/query:read/.test(issues)
+                    ? 'A 403 means the key lacks the query:read scope.' : '');
+            }
+        }
+
+        // Lists the experiments, keeps saved results that are still current,
+        // and fetches the rest (all of them with `force`: Re-pull all).
+        async function fetchPostHogData(apiKey, { force = false } = {}) {
+            const projectRef = localStorage.getItem(POSTHOG_PROJECT_KEY) || '';
+            setImportStatus('Loading experiments…');
+            let experiments;
+            try {
+                const fresh = await PostHogMapper.fetchExperiments(projectRef, apiKey);
+                const stored = await readStoredImportData();
+                const saved = stored?.[0]?._host ? stored : [];
+                experiments = ResumableResults.merge(fresh, saved, {
+                    changed: (now, before) => PostHogMapper.changed(now, before)
+                });
+                refreshUI(PostHogMapper.mapExperiments(experiments));
+            } catch (error) {
+                const hint = error.status === 401 || error.status === 403
+                    ? '\nCheck that this is a personal API key with experiment:read and query:read, '
+                        + 'and that the project URL or ID is right.'
+                    : '';
+                await listingFailed('PostHog', error, hint, stored => !!stored?.[0]?._host, saved => {
+                    refreshUI(PostHogMapper.mapExperiments(saved));
+                    showPostHogStatus(saved);
+                });
+                return;
+            }
+
+            if (!experiments.length) {
+                const listing = PostHogMapper.lastListing || {};
+                setImportStatus(listing.discovery === 'unavailable'
+                    ? 'No experiments in the key\'s default project. Paste your project URL under Import, '
+                        + 'or add the project:read scope so Rerun can find it'
+                    : listing.discovery === 'found' || listing.project === '@current'
+                        ? `No finished experiments in any project on ${listing.host}`
+                        : `No finished experiments in project ${listing.project} on ${listing.host}`);
+                return;
+            }
+            await fetchPostHogResults(apiKey, experiments, ResumableResults.pending(experiments, { force }));
         }
 
         // Reads the bulk payload from IndexedDB, falling back to a payload left
@@ -3729,6 +4087,9 @@
             try {
                 const platform = localStorage.getItem(IMPORT_PLATFORM_KEY);
                 if (!platform) return false;
+                // Set aside for Dummy Data: kept, but not shown until the
+                // toggle is switched back on.
+                if (localStorage.getItem(IMPORT_ACTIVE_KEY) === '0') return false;
 
                 const timestamp = localStorage.getItem(IMPORT_TIMESTAMP_KEY);
                 const cacheDate = timestamp ? new Date(parseInt(timestamp)).toLocaleString() : 'unknown';
@@ -3740,6 +4101,7 @@
                     if (parsedData) {
                         refreshUI(parsedData);
                         dataSourceToggle.checked = true;
+                        setImportStatus('Loaded Convert CSV');
                         if (accountId) csvAccountId.value = accountId;
                         console.log(`Restored Convert CSV import from cache (${cacheDate}):`, parsedData.length, 'experiments');
                         return true;
@@ -3756,7 +4118,7 @@
                         refreshUI(parsedData);
                         dataSourceToggle.checked = true;
                         const fileName = localStorage.getItem(IMPORT_FILE_NAME_KEY);
-                        setImportStatus(fileName ? `Loaded ${fileName}` : '');
+                        setImportStatus(fileName ? `Loaded ${fileName}` : 'Loaded a JSON file');
                         console.log(`Restored local JSON import from cache (${cacheDate}):`, parsedData.length, 'experiments');
                         return true;
                     }
@@ -3765,16 +4127,31 @@
                     console.log(`Local JSON import settings found from cache (${cacheDate}), but no mapped data was cached; loading dummy data instead.`);
                     return false;
                 } else if (platform === 'growthbook') {
+                    const stored = await readStoredImportData();
+                    const cached = isGrowthBookRaw(stored) ? stored : null;
                     const apiKey = getSavedApiKey();
-                    if (!apiKey) return false;
+                    if (!cached && !apiKey) return false;
 
                     apiConfig.platform = platform;
-                    apiConfig.apiKey = apiKey;
+                    apiConfig.apiKey = apiKey || '';
                     isUsingApiData = true;
                     dataSourceToggle.checked = true;
-                    // Trigger async fetch — will update table when done
-                    fetchGrowthBookData(apiKey);
-                    console.log(`Restored GrowthBook import from cache (${cacheDate})`);
+                    if (cached) {
+                        refreshUI(GrowthBookMapper.mapExperiments(cached));
+                        // Finish what an interrupted load left, without
+                        // listing again; everything else stays as saved.
+                        const pending = ResumableResults.pending(cached);
+                        if (pending.length && apiKey) {
+                            fetchGrowthBookResults(apiKey, cached, pending);
+                        } else {
+                            showGrowthBookStatus(cached);
+                        }
+                        console.log(`Restored GrowthBook results from cache (${cacheDate}):`, cached.length,
+                            'experiments,', pending.length, 'to finish');
+                    } else {
+                        fetchGrowthBookData(apiKey);
+                        console.log(`Restored GrowthBook import, fetching (${cacheDate})`);
+                    }
                     return true;
                 } else if (platform === 'amplitude') {
                     const apiKey = getSavedApiKey();
@@ -3794,16 +4171,60 @@
                     // rows (no `variants`) is refetched rather than misread.
                     const cached = stored?.[0]?.variants ? stored : null;
                     if (cached) {
+                        // A cache from before per-experiment saving: an
+                        // experiment with results there was complete.
+                        cached.forEach(exp => {
+                            if (!exp._fetchedAt && exp.analysis) exp._fetchedAt = Number(timestamp) || Date.now();
+                        });
                         amplitudeLoaded = cached;
                         amplitudeAll = null;
                         refreshUI(AmplitudeMapper.mapExperiments(cached));
-                        showAmplitudeStatus(timestamp
-                            ? new Date(parseInt(timestamp)).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
-                            : '');
-                        console.log(`Restored Amplitude results from cache (${cacheDate}):`, cached.length, 'experiments');
+                        // Finish what an interrupted load left (needs the
+                        // sign-in); everything else stays as saved.
+                        const pending = ResumableResults.pending(cached);
+                        if (pending.length && AmplitudeMapper.mcp.isSignedIn()) {
+                            fetchAmplitudeResults(apiKey, pending);
+                        } else {
+                            showAmplitudeStatus();
+                        }
+                        console.log(`Restored Amplitude results from cache (${cacheDate}):`, cached.length,
+                            'experiments,', pending.length, 'to finish');
                     } else {
                         fetchAmplitudeData(apiKey);
                         console.log(`Restored Amplitude import, fetching (${cacheDate})`);
+                    }
+                    return true;
+                } else if (platform === 'posthog') {
+                    const stored = await readStoredImportData();
+                    // The cache holds raw PostHog experiments (marked by `_host`).
+                    const cached = stored?.[0]?._host ? stored : null;
+                    const apiKey = getSavedApiKey();
+                    if (!cached && !apiKey) return false;
+
+                    apiConfig.platform = platform;
+                    apiConfig.apiKey = apiKey || '';
+                    isUsingApiData = true;
+                    dataSourceToggle.checked = true;
+                    if (cached) {
+                        refreshUI(PostHogMapper.mapExperiments(cached));
+                        // A cache from before per-experiment saving: an
+                        // experiment with results there was complete.
+                        cached.forEach(exp => {
+                            if (!exp._fetchedAt && exp._results?.primary) exp._fetchedAt = Number(timestamp) || Date.now();
+                        });
+                        // Finish what an interrupted load left, without
+                        // listing again; everything else stays as saved.
+                        const pending = ResumableResults.pending(cached);
+                        if (pending.length && apiKey) {
+                            fetchPostHogResults(apiKey, cached, pending);
+                        } else {
+                            showPostHogStatus(cached);
+                        }
+                        console.log(`Restored PostHog results from cache (${cacheDate}):`, cached.length,
+                            'experiments,', pending.length, 'to finish');
+                    } else {
+                        fetchPostHogData(apiKey);
+                        console.log(`Restored PostHog import, fetching (${cacheDate})`);
                     }
                     return true;
                 } else {
@@ -3828,71 +4249,17 @@
             return false;
         }
 
-        // Load from cache on page load
-        // Same shape as readStoredImportData: IndexedDB first, then migrate any
-        // payload an older version left in localStorage.
-        async function readStoredGrowthBookCache() {
-            try {
-                const stored = await idbGet(IDB_GROWTHBOOK_KEY);
-                if (Array.isArray(stored) && stored.length > 0) return stored;
-            } catch (error) {
-                console.warn('Could not read GrowthBook cache from IndexedDB:', error.message);
-            }
+        // GrowthBook used to keep its own cache, which took priority over the
+        // active import on startup. It now uses the shared import cache like
+        // every platform; the old copy is just removed.
+        localStorage.removeItem('growthbook_experiments_cache');
+        localStorage.removeItem('growthbook_experiments_cache_timestamp');
+        idbDelete('growthbookRawCache').catch(() => {});
 
-            const legacy = localStorage.getItem(CACHE_KEY);
-            if (!legacy) return null;
-            try {
-                const parsed = JSON.parse(legacy);
-                if (!Array.isArray(parsed) || parsed.length === 0) return null;
-                idbSet(IDB_GROWTHBOOK_KEY, parsed)
-                    .then(() => localStorage.removeItem(CACHE_KEY))
-                    .catch(() => {});
-                return parsed;
-            } catch (error) {
-                console.warn('Ignoring unreadable legacy GrowthBook cache:', error.message);
-                return null;
-            }
-        }
-
-        async function loadFromCache() {
-            try {
-                const cacheTimestamp = localStorage.getItem(CACHE_TIMESTAMP_KEY);
-                const filteredExperiments = cacheTimestamp ? await readStoredGrowthBookCache() : null;
-
-                if (filteredExperiments) {
-                    // Map the experiments using GrowthBook mapper
-                    const mappedExperiments = GrowthBookMapper.mapExperiments(filteredExperiments);
-
-                    // A stale or malformed cache maps to nothing. Treat that as a
-                    // miss so the dummy data still loads instead of an empty table.
-                    if (!mappedExperiments || mappedExperiments.length === 0) {
-                        console.warn('Ignoring empty/unusable GrowthBook cache; falling back to default data.');
-                        return false;
-                    }
-
-                    refreshUI(mappedExperiments);
-                    console.log('GrowthBook Experiments (from cache):', mappedExperiments.length, 'experiments');
-                    dataSourceToggle.checked = true;
-
-                    return true;
-                }
-            } catch (error) {
-                console.error('Error loading from cache:', error);
-                // refreshUI() may have already flagged the load as done before
-                // throwing; reset so the dummy-data fallback can still run.
-                initialDataLoaded = false;
-            }
-            return false;
-        }
-
-        // Try loading from cache before loading data.json
-        // Priority: GrowthBook API cache > last import cache > dummy data
-        // IndexedDB is async, so restoring no longer happens while this script is
-        // still executing; the dummy-data fallback moved into the chain below.
-        const restoreInitialData = (async () => {
-            if (await loadFromCache()) return true;
-            return loadFromImportCache();
-        })();
+        // Restore the last import, else the chain below loads the dummy data.
+        // IndexedDB is async, so restoring no longer happens while this script
+        // is still executing.
+        const restoreInitialData = loadFromImportCache();
 
         // Load data based on current toggle state
         function loadData(force = false) {
@@ -4262,9 +4629,10 @@
             URL.revokeObjectURL(link.href);
         }
 
-        // Adds the file's entries to the current list. Entries whose experiment
-        // isn't in the loaded data are skipped (the list prunes those anyway),
-        // and entries already on the list (same id) aren't added twice.
+        // Adds the file's entries to the list. Entries for experiments that
+        // aren't loaded right now are kept hidden, like any other (see
+        // syncRerunEntriesToDataset), and show once their data loads. Entries
+        // already saved (same id, shown or hidden) aren't added twice.
         function importRerunList(text) {
             let payload;
             try {
@@ -4278,38 +4646,45 @@
                 return;
             }
 
-            const datasetKeys = new Set(view.rows.map(viewRow => viewRow.selectionKey).filter(Boolean));
-            const existingIds = new Set(rerunInstances.map(inst => inst.id));
+            const existingIds = new Set([...rerunInstances, ...hiddenReruns].map(inst => inst.id));
             // Group ids are only unique within one session's list, so remap them
             // to keep imported compounds from merging into existing ones.
             const groupIds = new Map();
-            let added = 0, duplicate = 0, missing = 0;
+            const importedIds = [];
+            let duplicate = 0, invalid = 0;
 
             payload.reruns.forEach(({ id, experimentKey, experimentName, tags, compoundGroup, ...record }) => {
-                if (!experimentKey || !datasetKeys.has(experimentKey)) { missing++; return; }
+                if (!experimentKey) { invalid++; return; }
                 if (id && existingIds.has(id)) { duplicate++; return; }
                 const instanceId = id || newRerunInstanceId();
                 if (compoundGroup && !groupIds.has(compoundGroup)) {
                     groupIds.set(compoundGroup, 'cg' + (compoundGroupCounter++));
                 }
-                rerunInstances.push({ id: instanceId, key: experimentKey });
+                rerunInstances.push({ id: instanceId, key: experimentKey, name: experimentName || '' });
                 updateDetail(instanceId, {
                     ...record,
                     compoundGroup: compoundGroup ? groupIds.get(compoundGroup) : undefined,
                     tags: Array.isArray(tags) ? new Set(tags) : undefined
                 });
                 existingIds.add(instanceId);
-                added++;
+                importedIds.push(instanceId);
             });
 
-            if (added) {
+            // Sorts the new entries into shown (their test is loaded) and hidden.
+            syncRerunEntriesToDataset();
+            const shown = importedIds.filter(id => rerunInstances.some(inst => inst.id === id)).length;
+            const kept = importedIds.length - shown;
+            if (importedIds.length) {
                 afterRerunStateChange();
-                flashRerunTab();
+                if (shown) flashRerunTab();
             }
-            const notes = [];
-            if (duplicate) notes.push(`${duplicate} already on the list`);
-            if (missing) notes.push(`${missing} for experiments not in the loaded data`);
-            alert(`Added ${added} rerun${added === 1 ? '' : 's'}.` + (notes.length ? `\nSkipped ${notes.join(', ')}.` : ''));
+            const lines = [`Added ${shown} rerun${shown === 1 ? '' : 's'}.`];
+            if (kept) lines.push(`Kept ${kept} for experiments not loaded now; they show when that data is loaded.`);
+            const skipped = [];
+            if (duplicate) skipped.push(`${duplicate} already saved`);
+            if (invalid) skipped.push(`${invalid} without an experiment`);
+            if (skipped.length) lines.push(`Skipped ${skipped.join(', ')}.`);
+            alert(lines.join('\n'));
         }
 
         document.getElementById('rerunExportBtn').addEventListener('click', exportRerunList);
@@ -4824,7 +5199,56 @@
             const count = rerunInstances.length;
             badge.textContent = count;
             badge.style.display = count > 0 ? '' : 'none';
+            updateRerunHiddenNote();
         }
+
+        // On the Rerun tab's file row: how many saved reruns are hidden because
+        // their data isn't loaded, with a way to remove them on purpose.
+        function updateRerunHiddenNote() {
+            const note = document.getElementById('rerunHiddenNote');
+            if (!note) return;
+            const n = hiddenReruns.length;
+            note.replaceChildren();
+            if (!n) return;
+            note.append(
+                el('span', { class: 'tab-param-text', textContent: '·' }),
+                el('span', {
+                    class: 'tab-param-text rerun-hidden-count',
+                    textContent: `${n} more saved for data not loaded now`,
+                    'data-tip': 'Reruns for experiments that aren’t in the loaded data. They’re kept, and show again when that data is loaded.'
+                }),
+                el('button', {
+                    type: 'button',
+                    class: 'import-status-refresh rerun-clear-btn',
+                    id: 'rerunRemoveHiddenBtn',
+                    textContent: 'Remove them'
+                })
+            );
+        }
+
+        // Clearing is always a deliberate act, behind a confirmation, and
+        // scoped: Clear list empties what's shown; Remove them drops only the
+        // hidden reruns for other data.
+        document.getElementById('rerunActionsPanel').addEventListener('click', e => {
+            if (e.target.closest('#rerunClearBtn')) {
+                const n = rerunInstances.length;
+                if (!n) return;
+                if (!confirm(`Remove all ${n} rerun${n === 1 ? '' : 's'} shown here, with their notes, tags and types?\n\nThis can’t be undone. Use Export JSON first if you want a copy.`)) return;
+                commitOpenNotesField();
+                rerunInstances.forEach(inst => {
+                    rerunDetails.delete(inst.id);
+                    compoundSelectedKeys.delete(inst.id);
+                });
+                rerunInstances = [];
+                afterRerunStateChange();
+            } else if (e.target.closest('#rerunRemoveHiddenBtn')) {
+                const n = hiddenReruns.length;
+                if (!confirm(`Remove the ${n} rerun${n === 1 ? '' : 's'} saved for data not loaded now?\n\nThis can’t be undone.`)) return;
+                hiddenReruns = [];
+                saveRerunSelection();
+                updateRerunHiddenNote();
+            }
+        });
 
         // How many rows each scenario tab would highlight, counted over the whole
         // dataset rather than the rendered page. One pass for all tabs: each row
@@ -5679,46 +6103,6 @@
         searchBox.addEventListener('input', function(e) {
             applyTableVisibility();
         });
-
-        // Save to cache (used by fetchGrowthBookData)
-        // This caches the raw API payload rather than the mapped rows, so it is
-        // fatter per experiment than a CSV import and would hit the localStorage
-        // quota sooner; IndexedDB removes that ceiling.
-        async function saveToCache(filteredExperiments) {
-            try {
-                await idbSet(IDB_GROWTHBOOK_KEY, filteredExperiments);
-                localStorage.setItem(CACHE_TIMESTAMP_KEY, Date.now().toString());
-                localStorage.removeItem(CACHE_KEY);
-                return true;
-            } catch (error) {
-                console.warn('IndexedDB unavailable for GrowthBook cache:', error.message);
-            }
-
-            const serialized = JSON.stringify(filteredExperiments);
-            try {
-                localStorage.setItem(CACHE_KEY, serialized);
-                localStorage.setItem(CACHE_TIMESTAMP_KEY, Date.now().toString());
-                return true;
-            } catch (error) {
-                // Drop a partial write so the next load re-fetches instead of
-                // restoring a truncated or stale cache.
-                localStorage.removeItem(CACHE_KEY);
-                localStorage.removeItem(CACHE_TIMESTAMP_KEY);
-                if (isQuotaError(error)) {
-                    console.warn('GrowthBook cache exceeded localStorage quota:', error.message);
-                    alert(
-                        `Loaded ${filteredExperiments.length} experiments from GrowthBook, but they are `
-                        + `too large to cache in this browser (about ${approxStoredMB(serialized)} MB, `
-                        + 'over the ~5 MB limit) and IndexedDB is not available.\n\n'
-                        + 'The table below is correct. Reloading the page will re-fetch from the API '
-                        + 'rather than restore this data.'
-                    );
-                } else {
-                    console.error('Error saving to cache:', error);
-                }
-                return false;
-            }
-        }
     </script>
 </body>
 </html>
