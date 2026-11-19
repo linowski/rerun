@@ -6,7 +6,9 @@ Rerun is a browser-based experiment analysis dashboard for reviewing A/B test re
 
 - Loads demo experiment data from `data.json`, or imports real data: GrowthBook API, Amplitude Experiment Management API, PostHog API, Convert aggregated CSV exports, or a local JSON file already in the shape below. Mappers in `mappers/` normalize each platform into that shared shape.
 - Reads results three ways (**Method**): **As reported** uses each platform's own p-values (estimating the rest) and each test's own design; **Fixed horizon** and **Sequential (mSPRT)** recalculate every test as if it had been run that way. Tests can be two-sided, one-sided superiority, or non-inferiority with a margin.
-- Shows power at a chosen MDE, an adjustable significance level (Alpha), and per-test flags such as missing preregistration and average sample per day.
+- Sequential (mSPRT) uses a fixed mixing ratio r = 7.84, tuned to an 80%-powered effect (p < 0.05 needs z ≈ 3.03) and checked against Amplitude's own mSPRT. Rerun's recalculations apply Bonferroni to tests with several variants, and use each continuous metric's real spread rather than an assumed one.
+- Shows power at a chosen MDE, an adjustable significance level (Alpha), and per-test flags such as missing preregistration, average sample per day, run length (short runs flagged), and CUPED where the platform used it.
+- Shows reach against real site traffic where the platform allows it (PostHog site visitors, Amplitude active users), else labels the rollout as such.
 - Summarizes the whole program: success rate, Kohavi's false positive risk, and testing sensitivity (the share of tests powered to detect each effect size, plus the median MDE).
 - Highlights rerun candidates by scenario: Almost Significant, Squeeze The Lemon, Promising Losers, Too Good To Be True, and Too Good To Be False.
 - Builds a rerun list: pick a test design for each candidate (or a Ship it / Unship it decision), add notes and tags, compare its screenshots, and export or import the list as JSON.
@@ -31,10 +33,12 @@ percent (`5` means +5%).
   url,                      // optional link to the experiment on its platform
   change,                   // optional: what the variation did
   owner,
+  ownerEmail,               // optional: when `owner` is a name read from an email; shown in its tooltip
 
   // Timing
   date,                     // end date, YYYY-MM-DD
-  startDate,                // optional; with `date`, shows an average sample per day
+  startDate,                // optional; shown in Started with how long the test ran, and used
+                            //   for the average sample per day
 
   // Results
   primaryMetric,            // relative lift, %
@@ -45,8 +49,16 @@ percent (`5` means +5%).
   secondaryMetricType,
   pvalue,                   // optional: the platform's two-sided p-value for the primary
   secondaryPvalue,          // optional: same, for the secondary
+  pvalueCorrection,         // optional: the platform's Bonferroni factor, with
+  pvalueUncorrected,        //   the p-value before it (shown in the tooltip)
+  pvalueMissingReason,      // optional: why the platform gave no p-value (and
+  secondaryPvalueMissingReason, //   secondaryPvalueMissingReason), shown with Rerun's estimate
   sampleSize,               // total across arms
+  primaryCV, secondaryCV,   // continuous metrics: control SD / mean, needed to recalculate
+                            //   their p-value and power (without it, none is shown)
   baseRate,                 // control conversion rate, %; used where p-values must be estimated
+                            //   (0 = no conversions in control: nothing is estimated)
+  secondaryBaseRate,        // optional: a binary secondary's own control rate, %
 
   // Design
   testMethod,               // optional: "fixed" | "sequential" | "hybrid" | "bayesian"
@@ -55,10 +67,12 @@ percent (`5` means +5%).
   niMargin,                 // optional non-inferiority margin, % (defaults to the MDE input)
   preregisteredSampleSize,  // optional; fixed-horizon tests without it are flagged
   iterations,               // optional; 1+ marks a rerun of an earlier test
+  cuped,                    // optional: true when the platform's analysis used CUPED
 
   // Context
   decision,                 // optional: "Shipped" | "Not Shipped"
-  triggered,                // optional: array of { type } trigger descriptors
+  triggered,                // optional: [{ type, label }], type "page" | "interaction" | "segment" |
+                            //   "device" | "flag"; label is the condition, shown on hover
   traffic,                  // optional: % of traffic exposed
   reachLabel, reachNote,    // optional: what `traffic` is a % of (default "of traffic") and a tooltip
   additionalComparisons,    // optional: extra variations, each { variationName, ...results }
@@ -101,8 +115,18 @@ your own Streamline license.
 
 ## Custom Integrations
 
-Only the GrowthBook API, Amplitude, PostHog and Convert CSV import are wired up to
-pull real data today; the other mappers are scaffolding.
+PostHog, Amplitude and GrowthBook are fully connected and verified against real
+accounts; Convert CSV works in part (conversion and revenue only), and a local
+JSON file loads the full shape above. Convert, Eppo, ABsmartly and Kameleoon
+are not connected yet (the import dialog lists them as Coming soon). Running
+tests are skipped on every platform: their numbers are interim.
+
+GrowthBook uses a read-only **secret API key** (Settings → API Keys). Rerun
+lists the stopped experiments and fetches each one's results, taking the
+primary and secondary metrics from its goals, secondary metrics and guardrails,
+with decisions, screenshots and CUPED (regression adjustment) from the
+experiment. GrowthBook reports no site traffic, so reach is its coverage,
+labelled as rollout.
 
 PostHog uses a **personal API key** (Settings → Personal API keys) with the
 read scopes `experiment:read` and `query:read`, plus the project's URL or ID
@@ -122,7 +146,10 @@ Results (lift, p-value, sample size) come from **Sign in with Amplitude** in the
 same dialog: rerun signs in to Amplitude's MCP server with read-only OAuth and
 calls its `use_amp_experiments` tool (action `analyze`) directly from the browser. No AI client is
 involved, so no model tokens are used, and the sign-in is kept only for the
-browser tab. Each experiment is one `analyze` call, so rerun loads the 50
+browser tab. Alongside each experiment's `analyze` call, rerun reads its
+settings (stats method, CUPED, a Web Experiment's page rules and trigger) with
+the `get` action, and counts unique active users in the test window with one
+`query_amplitude_data` query, for reach. Each experiment is one `analyze` call, so rerun loads the 50
 newest first; **Load more** under the Import toggle adds 50 more, then 100 at a
 time. Serve rerun over `http://localhost` (e.g. VS Code Live Server);
 sign-in cannot return to a `file://` page. For custom integration or

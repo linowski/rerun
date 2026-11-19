@@ -183,6 +183,12 @@ h1 {
     white-space: nowrap;
 }
 
+.method-note[data-tip] {
+    cursor: help;
+    text-decoration: underline dotted;
+    text-underline-offset: 2px;
+}
+
 .method-note:empty {
     display: none;
 }
@@ -938,10 +944,29 @@ tr.row-flash {
     white-space: nowrap;
 }
 
+/* Run length on the rate line when it was short: amber under 7 days (no
+   full weekly cycle), plain under 14. */
+.sample-run-short {
+    color: #e0a800;
+    font-weight: 700;
+}
+
+.sample-run-brief {
+    color: var(--text-subtle);
+}
+
 .launch-date {
     font-size: 12px;
     color: var(--text-subtle);
     white-space: nowrap;
+}
+
+/* How long the test ran, under its start date. */
+.run-days {
+    display: block;
+    font-size: 11px;
+    color: var(--text-subtle);
+    opacity: 0.8;
 }
 
 /* Decision: whether the experiment shipped, as reported by the platform. A
@@ -1045,6 +1070,8 @@ th.col-power {
     top: 0;
     left: 0;
     max-width: 280px;
+    /* A tip may hold several short paragraphs (the Method notes). */
+    white-space: pre-line;
     width: max-content;
     padding: 4px 8px;
     background-color: var(--text-strong);
@@ -1055,7 +1082,7 @@ th.col-power {
     opacity: 0;
     visibility: hidden;
     pointer-events: none;
-    z-index: 1000;
+    z-index: 3000;  /* above the Import dialog (2000) */
 }
 
 .tooltip.visible {
@@ -1618,6 +1645,17 @@ th.col-secondary-p {
     padding-left: 4px;
 }
 
+/* Small note under a reported p-value (e.g. "CUPED"), like the MDE label
+   under the Power badge. */
+.pvalue-note {
+    display: block;
+    margin-top: 3px;
+    font-size: 10px;
+    letter-spacing: 0.04em;
+    color: var(--text-subtle);
+    cursor: help;
+}
+
 .pvalue {
     font-size: 12px;
     font-weight: 400;
@@ -1839,7 +1877,8 @@ tr.sub-row.highlighted-row .sub-row-name {
     border-radius: 8px;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
     width: 90%;
-    max-width: 500px;
+    /* Wide enough for the key hints to fit on one or two lines. */
+    max-width: 640px;
 }
 
 .modal-content h2 {
@@ -1906,12 +1945,16 @@ tr.sub-row.highlighted-row .sub-row-name {
     gap: 2px;
 }
 
-.radio-option {
+/* Scoped to .radio-group so it outranks `.form-group label` (a block with a
+   bottom margin), which otherwise breaks the row's alignment and spacing. */
+.radio-group .radio-option {
     display: flex;
     align-items: center;
     gap: 8px;
     cursor: pointer;
     padding: 8px;
+    margin-bottom: 0;
+    font-weight: 400;
     border: none;
     border-radius: 4px;
     transition: all 0.1s;
@@ -1940,6 +1983,20 @@ tr.sub-row.highlighted-row .sub-row-name {
     padding-top: 1px;
 }
 
+/* "Coming soon" platforms: shown, but not selectable. */
+.radio-group .radio-option:has(.radio-input:disabled) {
+    opacity: 0.55;
+    cursor: default;
+}
+
+.radio-group .radio-option:has(.radio-input:disabled):hover {
+    background-color: transparent;
+}
+
+.radio-option:has(.radio-input:disabled) .radio-input {
+    cursor: default;
+}
+
 .radio-option:has(.radio-input:checked) {
     background-color: var(--hover-blue);
 }
@@ -1955,13 +2012,32 @@ tr.sub-row.highlighted-row .sub-row-name {
 }
 
 .platform-status-live {
-    color: var(--success);
+    /* Darker than --success for contrast on the pale tint. */
+    color: #1a7a33;
     background-color: rgba(40, 167, 69, 0.12);
 }
 
 .platform-status-soon {
-    color: var(--text-muted);
+    color: #555;
     background-color: var(--surface-soft);
+}
+
+/* How a platform connects (API key, sign-in, file), after its name. */
+.platform-via {
+    margin-left: 8px;
+    font-size: 11px;
+    color: var(--text-subtle);
+}
+
+/* Works, with known gaps (listed in its tooltip). */
+.platform-status-partial {
+    color: #8a6100;
+    background-color: rgba(224, 168, 0, 0.14);
+}
+
+
+.platform-status[data-tip] {
+    cursor: help;
 }
 
 .saved-import-hint:empty {

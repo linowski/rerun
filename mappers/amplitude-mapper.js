@@ -35,13 +35,24 @@ const AmplitudeMapper = {
         for (const host of hosts) {
             try {
                 const experiments = await this.fetchAllPages(host, apiKey);
-                return experiments.filter(exp => this.isAnalyzable(exp));
+                return experiments.filter(exp => this.isAnalyzable(exp)).map(exp => this.slim(exp));
             } catch (error) {
                 lastError = error;
                 if (error.status !== 401) break;
             }
         }
         throw lastError;
+    },
+
+    // Drops what Rerun never reads before it is saved: each variant's
+    // payload (a Web Experiment's injected JS/CSS/HTML), about 90% of an
+    // experiment's size. Only each variant's key and name are kept.
+    slim(experiment) {
+        if (!experiment?.variants?.some(v => v && 'payload' in v)) return experiment;
+        return {
+            ...experiment,
+            variants: experiment.variants.map(v => ({ key: v.key, name: v.name }))
+        };
     },
 
     async fetchAllPages(host, apiKey) {
@@ -115,7 +126,83 @@ const AmplitudeMapper = {
                 JSON.stringify(result).slice(0, 400));
             throw ResumableResults.permanentError('returned no usable results');
         }
-        return { ...experiment, analysis };
+        const activeUsers = await this.fetchActiveUsers(experiment);
+        return { ...experiment, analysis, _activeUsers: activeUsers };
+    },
+
+    // The test's window as Amplitude dates: start to end, or to its last
+    // change when no end was recorded.
+    testWindow(experiment) {
+        const end = experiment.endDate || experiment.lastModifiedAt || new Date().toISOString();
+        return { start: String(experiment.startDate || '').slice(0, 10), end: String(end).slice(0, 10) };
+    },
+
+    /**
+     * Unique active users in the project while the test ran, for reach
+     * (exposed ÷ active users): one events-segmentation query through the
+     * MCP `query_amplitude_data` tool (event `_active`, metric `uniques`),
+     * whose `overallSeries` is the distinct count across the whole window
+     * (not a sum of daily uniques). It leaves an unsaved chart draft in
+     * Amplitude, nothing on a dashboard. Optional: null on any failure, and
+     * the Reach column falls back to the rollout.
+     */
+    async fetchActiveUsers(experiment) {
+        const { start, end } = this.testWindow(experiment);
+        const projectId = String(experiment.projectId || '');
+        if (!start || !end || !projectId) return null;
+        try {
+            const result = await this.mcp.callTool('query_amplitude_data', {
+                projectId,
+                definition: {
+                    type: 'eventsSegmentation', app: projectId, name: 'Rerun: active users during test', vis: 'kpi',
+                    params: {
+                        start, end,
+                        events: [{ event_type: '_active', filters: [], group_by: [] }],
+                        metric: 'uniques', countGroup: 'User', groupBy: [], interval: 1,
+                        segments: [{ conditions: [] }]
+                    }
+                }
+            });
+            for (const payload of this.mcp.parseToolResult(result)) {
+                const value = Number(payload?.data?.jsonResponse?.overallSeries?.[0]?.[0]?.value);
+                if (Number.isFinite(value) && value > 0) return value;
+            }
+        } catch (error) {
+            console.warn(`Amplitude: no active-user count for "${experiment.name}":`, error.message);
+        }
+        return null;
+    },
+
+    /**
+     * Reach for the Reach column: { traffic, reachLabel, reachNote }. Real
+     * reach is everyone in the analysis (every arm) ÷ the project's unique
+     * active users in the test window. Without that count, the rollout,
+     * labelled as such: a share of eligible users, not of the site.
+     */
+    reach(experiment) {
+        const rollout = MapperUtils.firstNumber(experiment, ['rolloutPercentage'], null);
+        const summary = experiment.analysis?.summary || {};
+        const exposed = Object.values(summary).reduce((sum, arm) => sum + (Number(arm?.num) || 0), 0);
+        const active = experiment._activeUsers;
+        const rolloutText = rollout !== null ? ` Rollout: ${rollout}% of eligible users.` : '';
+        if (exposed && active) {
+            const share = Math.min(100, exposed / active * 100);
+            const { start, end } = this.testWindow(experiment);
+            return {
+                traffic: share >= 10 ? Math.round(share) : Math.round(share * 10) / 10,
+                reachLabel: 'of active users',
+                reachNote: `${exposed.toLocaleString()} exposed of ${active.toLocaleString()} unique active users `
+                    + `between ${start} and ${end}.${rolloutText}`
+            };
+        }
+        return {
+            traffic: rollout,
+            reachLabel: 'rollout',
+            reachNote: 'Share of eligible users the experiment enrolled (its rollout'
+                + (experiment.targetSegments?.length ? ', within its target segments' : '')
+                + '), not of all site visitors'
+                + (experiment.analysis ? ' (no active-user count yet: Re-pull all fetches it).' : '.')
+        };
     },
 
     // Whether a saved experiment's results may be out of date: it changed
@@ -205,9 +292,35 @@ const AmplitudeMapper = {
                     if (config?.analysisParams) experiment.analysisParams = config.analysisParams;
                     // Metric ids in metricIndex order; index 0 is the primary.
                     if (Array.isArray(config?.metrics)) {
-                        experiment.metricIds = [...config.metrics]
-                            .sort((a, b) => (a.metricIndex ?? 0) - (b.metricIndex ?? 0))
-                            .map(metric => String(metric.id));
+                        const metrics = [...config.metrics]
+                            .sort((a, b) => (a.metricIndex ?? 0) - (b.metricIndex ?? 0));
+                        experiment.metricIds = metrics.map(metric => String(metric.id));
+                        // The primary's direction ("larger" / "smaller") and MDE.
+                        const primary = metrics.find(m => m.isPrimary) || metrics[0];
+                        if (primary?.analysisParams) {
+                            experiment.primaryMetricParams = {
+                                testDirection: primary.analysisParams.testDirection || null,
+                                minDetectableEffect: primary.analysisParams.minDetectableEffect ?? null
+                            };
+                        }
+                    }
+                    // The experiment's own Amplitude URL: it includes the
+                    // organization's slug, which nothing else carries.
+                    if (typeof config?.url === 'string' && config.url.startsWith('https://')) {
+                        experiment.amplitudeUrl = config.url;
+                    }
+                    // A Web Experiment's pages (URL rules) and what triggers
+                    // it on them (page load, an element appearing...), for
+                    // the Trigger column. Only those fields are kept.
+                    if (Array.isArray(config?.pageViewObjects)) {
+                        experiment.pageViewObjects = config.pageViewObjects.map(page => ({
+                            name: page.name || '',
+                            conditions: (page.conditions || []).map(c => ({
+                                url: c.url, isExclude: !!c.isExclude, matchType: c.matchType || ''
+                            })),
+                            triggerType: page.triggerType || '',
+                            triggerValue: page.triggerValue || null
+                        }));
                     }
                 }
             } catch (error) {
@@ -242,11 +355,23 @@ const AmplitudeMapper = {
         return [...experiments].sort((a, b) => date(b).localeCompare(date(a)));
     },
 
-    // Keep experiments that have actually run: skip deleted/archived ones and
-    // ones still being planned, which have no traffic to analyze.
+    // Keep finished experiments: skip deleted/archived ones, ones still being
+    // planned (no traffic) and ones still running, whose numbers are interim
+    // (exactly the peeking case).
     isAnalyzable(experiment) {
         if (experiment.deleted || experiment.archived) return false;
-        return experiment.state !== 'planning';
+        return experiment.state !== 'planning' && this.isFinished(experiment);
+    },
+
+    // Finished: moved past running (e.g. a decision was made), a decision or
+    // rolled-out variant is recorded, or its end date has passed. A test
+    // still marked running with any of these counts as finished, since
+    // many are never formally closed.
+    isFinished(experiment) {
+        if (experiment.state && experiment.state !== 'running') return true;
+        if (experiment.rolledOutVariant || experiment.decision) return true;
+        const end = experiment.endDate ? new Date(experiment.endDate) : null;
+        return !!end && !Number.isNaN(end.getTime()) && end <= new Date();
     },
 
     /**
@@ -271,6 +396,7 @@ const AmplitudeMapper = {
                 secondaryMetricLabel: this.extractMetricLabel(experiment, 'secondary'),
                 secondaryMetricType: this.determineMetricType(experiment, 'secondary'),
                 pvalue: this.extractPValue(experiment, i),
+                ...this.extractCorrection(experiment, i),
                 sampleSize: this.extractSampleSize(experiment, i),
                 power: null
             });
@@ -280,7 +406,10 @@ const AmplitudeMapper = {
             id: experiment.id || experiment.key || null,
             name: experiment.name || experiment.key || 'Untitled Experiment',
             url: this.buildUrl(experiment),
-            date: (experiment.startDate || experiment.createdAt || '').slice(0, 10),
+            // `date` is the end date across Rerun; a finished test with none
+            // recorded ends at its last change (usually the decision).
+            date: (experiment.endDate || experiment.lastModifiedAt || experiment.startDate || experiment.createdAt || '').slice(0, 10),
+            startDate: (experiment.startDate || '').slice(0, 10) || null,
             primaryMetric: this.extractMetricValue(experiment, 'primary'),
             primaryMetricLabel: this.extractMetricLabel(experiment, 'primary'),
             primaryMetricType: this.determineMetricType(experiment, 'primary'),
@@ -289,16 +418,26 @@ const AmplitudeMapper = {
             secondaryMetricType: this.determineMetricType(experiment, 'secondary'),
             sampleSize: this.extractSampleSize(experiment),
             baseRate: this.extractBaseRate(experiment),
+            primaryCV: this.extractCV(experiment),
             power: null,
             pvalue: this.extractPValue(experiment),
+            ...this.extractCorrection(experiment),
             // Rerun's iterations means "reruns an earlier test", which
             // Amplitude does not record; every experiment counts as first-time.
             iterations: 0,
             testMethod: this.extractTestMethod(experiment),
+            // CUPED variance reduction in Amplitude's analysis (true / false;
+            // null when the setting is not known).
+            cuped: typeof experiment.analysisParams?.experimentAnalysisUseCuped === 'boolean'
+                ? experiment.analysisParams.experimentAnalysisUseCuped : null,
             triggered: this.extractTriggers(experiment),
-            traffic: MapperUtils.firstNumber(experiment, ['rolloutPercentage'], null),
+            // Reach against active users when counted, else the rollout.
+            ...this.reach(experiment),
             trafficSubtitle: this.extractTrafficSubtitle(experiment),
-            owner: experiment.createdBy || '',
+            // Amplitude gives owners as emails only: shown as a name read from
+            // the email, with the email kept for the tooltip and search.
+            owner: MapperUtils.nameFromEmail(experiment.owners?.[0] || experiment.createdBy),
+            ownerEmail: experiment.owners?.[0] || experiment.createdBy || '',
             change: experiment.description || '',
             decision: this.extractDecision(experiment),
             additionalComparisons: additionalComparisons
@@ -310,13 +449,30 @@ const AmplitudeMapper = {
      * @param {Array} experiments - Array of raw experiments from Amplitude API
      * @returns {Array} - Array of standardized experiment objects
      */
+    // Filters again so a cache saved before running tests were skipped
+    // drops them too.
     mapExperiments(experiments) {
-        return MapperUtils.mapExperiments(this, experiments);
+        const list = experiments || [];
+        // One org per import: any experiment's own URL gives the slug the
+        // others need to link correctly.
+        this.orgSlug = list.map(exp => this.orgSlugFrom(exp.amplitudeUrl)).find(Boolean) || this.orgSlug || null;
+        return MapperUtils.mapExperiments(this, list.filter(exp => this.isAnalyzable(exp)));
     },
 
+    // The URL Amplitude gives (saved by fetchAnalysisParams), else one built
+    // in the same shape, /experiment/<org slug>/<project>/config/<id>, with
+    // the org slug taken from any experiment that has its URL (see
+    // mapExperiments). Without a slug there is no working link: null.
     buildUrl(experiment) {
-        if (!experiment.projectId || !experiment.id) return null;
-        return `https://app.amplitude.com/experiment/${experiment.projectId}/${experiment.id}/config`;
+        if (experiment.amplitudeUrl) return experiment.amplitudeUrl;
+        if (!this.orgSlug || !experiment.projectId || !experiment.id) return null;
+        return `https://app.amplitude.com/experiment/${this.orgSlug}/${experiment.projectId}/config/${experiment.id}`;
+    },
+
+    // The org slug from a saved Amplitude URL, e.g. "acme-123456".
+    orgSlugFrom(url) {
+        const match = String(url || '').match(/app\.amplitude\.com\/experiment\/([^/]+)\/\d+\/config\//);
+        return match ? match[1] : null;
     },
 
     // Amplitude records a decision to roll out a variant as rolledOutVariant;
@@ -334,11 +490,71 @@ const AmplitudeMapper = {
 
     // Every experiment is triggered by assignment; target segments narrow it
     // to an audience, and a feature-flag delivery means an in-app interaction.
+    /**
+     * The Trigger column, from what the experiment records (as for PostHog):
+     *  - a Web Experiment (deliveryMethod 'web') runs on matching pages:
+     *    page, with its URL rules (`pageViewObjects`, saved by
+     *    fetchAnalysisParams) in the tooltip;
+     *  - its page trigger, when it is not page load (an element appearing, a
+     *    click, manual activation...): interaction, with the condition;
+     *  - a feature experiment runs wherever the code checks its flag: flag;
+     *  - target segments with conditions narrow it to an audience: segment.
+     */
     extractTriggers(experiment) {
-        const types = [{ type: 'page' }];
-        if (experiment.targetSegments?.length) types.push({ type: 'segment' });
-        if (experiment.deliveryMethod === 'feature') types.push({ type: 'interaction' });
-        return types;
+        const triggers = [];
+        if (experiment.deliveryMethod === 'web') {
+            const pages = experiment.pageViewObjects || [];
+            const rules = pages.flatMap(page => page.conditions || [])
+                .map(c => `${c.isExclude ? 'not ' : ''}${this.describeUrlRule(c)}`);
+            triggers.push({
+                type: 'page',
+                label: rules.length
+                    ? `Web Experiment on pages where ${rules.join('; ')}`
+                    : 'Web Experiment: applied on the pages it targets'
+            });
+            const interactions = pages
+                .filter(page => page.triggerType && !this.isPageLoadTrigger(page.triggerType))
+                .map(page => this.describeTrigger(page));
+            if (interactions.length) {
+                triggers.push({ type: 'interaction', label: [...new Set(interactions)].join('; ') });
+            }
+        } else {
+            triggers.push({ type: 'flag', label: `Feature flag${experiment.key ? ` ${experiment.key}` : ''}: `
+                + 'exposed wherever the code checks it, not tied to a page' });
+        }
+        const segments = (experiment.targetSegments || [])
+            .filter(segment => (segment.conditions || []).length);
+        if (segments.length) {
+            triggers.push({ type: 'segment', label: segments.map(s => s.name || 'Target segment').join('; ') });
+        }
+        return triggers;
+    },
+
+    // Fires as soon as a matching page loads (or the URL changes in a
+    // single-page app): no interaction involved.
+    isPageLoadTrigger(type) {
+        return /load|immediate|url_change|route|navigation|page_?view/i.test(type);
+    },
+
+    // "Fires when #signup-form appears", "Fires on click of .cta"...
+    describeTrigger(page) {
+        const value = page.triggerValue || {};
+        const target = value.selector || value.element || value.eventName || value.event || '';
+        const type = String(page.triggerType);
+        if (/element_appeared|element_visible|appear/i.test(type)) return `Fires when ${target || 'an element'} appears`;
+        if (/click/i.test(type)) return `Fires on click${target ? ` of ${target}` : ''}`;
+        if (/scroll/i.test(type)) return `Fires on scroll${value.percentage ? ` past ${value.percentage}%` : ''}`;
+        if (/manual/i.test(type)) return 'Fires on manual activation from the page’s code';
+        if (/exit/i.test(type)) return 'Fires on exit intent';
+        return `Fires on ${type.replace(/_/g, ' ')}${target ? ` (${target})` : ''}`;
+    },
+
+    // One URL rule, shortened: long regexes (dozens of destinations) are cut.
+    describeUrlRule(rule) {
+        const url = String(rule.url || '').replace(/\\\//g, '/');
+        const short = url.length > 90 ? `${url.slice(0, 87)}…` : url;
+        const how = rule.matchType === 'regex' ? 'URL matches' : rule.matchType === 'exact' ? 'URL is' : 'URL contains';
+        return `${how} ${short}`;
     },
 
     extractTrafficSubtitle(experiment) {
@@ -403,6 +619,19 @@ const AmplitudeMapper = {
         );
     },
 
+    // Amplitude reports pValue already Bonferroni-corrected across the
+    // treatment arms (pValue = uncorrectedPValue x correctionFactor, capped
+    // at 1). Passed on so the p-value tooltip can show the correction.
+    extractCorrection(experiment, variantIndex = 1) {
+        const arm = this.analysisArm(experiment, variantIndex);
+        const factor = MapperUtils.firstNumber(arm, ['correctionFactor'], null);
+        if (!(factor > 1)) return {};
+        return {
+            pvalueCorrection: factor,
+            pvalueUncorrected: MapperUtils.normalizePValue(MapperUtils.firstValue(arm, ['uncorrectedPValue'], null))
+        };
+    },
+
     // Control plus the compared variant, matching the other mappers.
     extractSampleSize(experiment, variantIndex = 1) {
         const control = MapperUtils.firstNumber(this.analysisArm(experiment, 0), ['num'], 0);
@@ -424,6 +653,17 @@ const AmplitudeMapper = {
     },
 
     // Control mean as a percentage (5 for 5%), or null.
+    // A continuous primary's spread: the control arm's SD / mean, which
+    // Rerun's recalculated p-values and power need (null for binary).
+    extractCV(experiment) {
+        if (experiment.analysis?.isBinaryMetric !== false) return null;
+        const control = this.analysisArm(experiment, 0);
+        const mean = MapperUtils.firstNumber(control, ['mean'], null);
+        const variance = MapperUtils.firstNumber(control, ['variance'], null);
+        if (!(mean > 0) || !(variance >= 0)) return null;
+        return Math.sqrt(variance) / mean;
+    },
+
     extractBaseRate(experiment) {
         const mean = MapperUtils.firstNumber(this.analysisArm(experiment, 0), ['mean'], null);
         return mean === null ? null : Math.round(mean * 100 * 100) / 100;

@@ -77,50 +77,64 @@
                         <label>Platform</label>
                         <div class="radio-group">
                             <label class="radio-option">
-                                <input type="radio" name="platform" value="growthbook" class="radio-input">
-                                <span class="radio-label">GrowthBook</span>
-                                <span class="platform-status platform-status-live">Connected</span>
-                            </label>
-                            <label class="radio-option">
-                                <input type="radio" name="platform" value="csv" class="radio-input">
-                                <span class="radio-label">Convert CSV</span>
-                                <span class="platform-status platform-status-live">Connected</span>
-                            </label>
-                            <label class="radio-option">
-                                <input type="radio" name="platform" value="convert" class="radio-input">
-                                <span class="radio-label">Convert</span>
-                                <span class="platform-status platform-status-soon">Coming soon</span>
-                            </label>
-                            <label class="radio-option">
-                                <input type="radio" name="platform" value="eppo" class="radio-input">
-                                <span class="radio-label">Eppo</span>
-                                <span class="platform-status platform-status-soon">Coming soon</span>
-                            </label>
-                            <label class="radio-option">
-                                <input type="radio" name="platform" value="absmartly" class="radio-input">
-                                <span class="radio-label">ABsmartly</span>
-                                <span class="platform-status platform-status-soon">Coming soon</span>
+                                <input type="radio" name="platform" value="posthog" class="radio-input">
+                                <span class="radio-label">PostHog</span>
+                                <span class="platform-via" data-tip="A personal API key (read scopes)">API key</span>
+                                <span class="platform-status platform-status-live" data-tip="Verified on real data: results, p-values, method and CUPED, reach vs site visitors, triggers, screenshots, decisions. Bayesian p-values are converted from chance to win.">Connected</span>
                             </label>
                             <label class="radio-option">
                                 <input type="radio" name="platform" value="amplitude" class="radio-input">
                                 <span class="radio-label">Amplitude</span>
-                                <span class="platform-status platform-status-live">Connected</span>
+                                <span class="platform-via" data-tip="A Management API key lists the experiments; Sign in with Amplitude (OAuth, read-only) fetches results through Amplitude’s MCP server">API key + sign-in (MCP)</span>
+                                <span class="platform-status platform-status-live" data-tip="Verified on real data: results, p-values, method and CUPED, reach vs active users, page triggers, decisions. Primary metric only; results need Sign in with Amplitude.">Connected</span>
                             </label>
                             <label class="radio-option">
-                                <input type="radio" name="platform" value="posthog" class="radio-input">
-                                <span class="radio-label">PostHog</span>
-                                <span class="platform-status platform-status-live">Connected</span>
+                                <input type="radio" name="platform" value="growthbook" class="radio-input">
+                                <span class="radio-label">GrowthBook</span>
+                                <span class="platform-via" data-tip="A read-only secret key">API key</span>
+                                <span class="platform-status platform-status-live" data-tip="Verified on real data: goal, secondary and guardrail metrics, p-values, method and CUPED, triggers, screenshots, decisions. Reach is the rollout only (no site traffic).">Connected</span>
+                            </label>
+                            <label class="radio-option">
+                                <input type="radio" name="platform" value="csv" class="radio-input">
+                                <span class="radio-label">Convert CSV</span>
+                                <span class="platform-via" data-tip="Convert’s aggregated report, exported as CSV">CSV export</span>
+                                <span class="platform-status platform-status-partial" data-tip="Convert’s aggregated report: conversion and revenue per visitor only. No dates, decisions, owners or Convert’s own p-values (Rerun estimates them).">Connected · Partial</span>
+                            </label>
+                            <label class="radio-option">
+                                <input type="radio" name="platform" value="convert" class="radio-input" disabled>
+                                <span class="radio-label">Convert</span>
+                                <span class="platform-via">API</span>
+                                <span class="platform-status platform-status-soon">Coming soon</span>
                             </label>
                             <label class="radio-option">
                                 <input type="radio" name="platform" value="local-json" class="radio-input">
                                 <span class="radio-label">Local JSON File</span>
-                                <span class="platform-status platform-status-live">Connected</span>
+                                <span class="platform-via" data-tip="A file on this computer, already in Rerun’s data shape">JSON file</span>
+                                <span class="platform-status platform-status-live" data-tip="Complete: loads every field of Rerun’s data shape as is (results, p-values, dates, decisions, screenshots…).">Connected</span>
+                            </label>
+                            <label class="radio-option">
+                                <input type="radio" name="platform" value="eppo" class="radio-input" disabled>
+                                <span class="radio-label">Eppo</span>
+                                <span class="platform-via">API</span>
+                                <span class="platform-status platform-status-soon">Coming soon</span>
+                            </label>
+                            <label class="radio-option">
+                                <input type="radio" name="platform" value="absmartly" class="radio-input" disabled>
+                                <span class="radio-label">ABsmartly</span>
+                                <span class="platform-via">API</span>
+                                <span class="platform-status platform-status-soon">Coming soon</span>
+                            </label>
+                            <label class="radio-option">
+                                <input type="radio" name="platform" value="kameleoon" class="radio-input" disabled>
+                                <span class="radio-label">Kameleoon</span>
+                                <span class="platform-via">API</span>
+                                <span class="platform-status platform-status-soon">Coming soon</span>
                             </label>
                         </div>
                         <div class="form-hint saved-import-hint" id="savedImportHint"></div>
                         <div class="platform-help-note">
                             <div class="platform-help-title">Need a Custom Integration and Setup?</div>
-                            Only GrowthBook, Amplitude, PostHog and Convert CSV import real data right now. Jakub is happy to wire up any of these (or another platform entirely).<br>&rarr; <a href="https://linowski.ca" target="_blank" rel="noopener" class="platform-help-cta">Contact me at Linowski.ca</a>
+                            Jakub is happy to wire up any of these (or another platform entirely).<br>&rarr; <a href="https://linowski.ca" target="_blank" rel="noopener" class="platform-help-cta">Contact me at Linowski.ca</a>
                         </div>
                     </div>
                     <div class="form-group" id="apiKeyGroup">
@@ -424,8 +438,11 @@
             return value > 0 && value < 1 ? value : 0.05;
         }
 
+        // The control rate, or the default when the platform gave none. A
+        // reported 0 (the control had no conversions) stays 0: no lift or
+        // p-value can be worked out against it, rather than a made-up 5%.
         function getExperimentBaseRate(experiment) {
-            return experiment.baseRate || DEFAULT_BASE_RATE;
+            return experiment.baseRate === 0 ? 0 : (experiment.baseRate || DEFAULT_BASE_RATE);
         }
 
         function withCalculatedStats(data) {
@@ -486,11 +503,21 @@
             const hypothesis = item.hypothesis || parent?.hypothesis || 'two-sided';
             const ownMargin = item.niMargin ?? parent?.niMargin;
             const niMargin = ownMargin > 0 ? ownMargin : mde;
+            // A continuous metric's spread (control SD / mean), from the
+            // mapper; a comparison sub-row shares its parent's control.
+            const primaryCV = item.primaryCV ?? parent?.primaryCV ?? null;
+            const secondaryCV = item.secondaryCV ?? parent?.secondaryCV ?? null;
             const power = sequential
-                ? recalculatePower(item.sampleSize / SEQUENTIAL_SAMPLE_SIZE_INFLATION, item.primaryMetricType, mde, baseRate)
-                : recalculatePower(item.sampleSize, item.primaryMetricType, mde, baseRate);
+                ? recalculatePower(item.sampleSize / SEQUENTIAL_SAMPLE_SIZE_INFLATION, item.primaryMetricType, mde, baseRate, primaryCV)
+                : recalculatePower(item.sampleSize, item.primaryMetricType, mde, baseRate, primaryCV);
 
-            const pvalueFor = (reportedP, metricType, effect, hyp) => {
+            // Bonferroni for tests with several variants: each comparison
+            // against control is one of `arms`, so a p-value Rerun computes
+            // is multiplied by that count (capped at 1), as platforms do
+            // (Amplitude, for one). A platform's reported p is used as it
+            // comes: it carries its own correction, or none.
+            const arms = 1 + ((parent || item).additionalComparisons?.length || 0);
+            const pvalueFor = (reportedP, metricType, effect, hyp, cv, rate, reportedCorrection, reportedUncorrected) => {
                 const twoSided = hyp === 'two-sided';
                 const reported = method === 'reported' && isPValue(reportedP);
                 // A known-sequential platform's two-sided p is already
@@ -503,15 +530,23 @@
                     const value = knownSequential
                         ? reportedP
                         : hypothesisPValue(reportedP, effect, hyp, niMargin, sequential);
-                    return { value, estimated: false };
+                    return { value, estimated: false, correction: reportedCorrection > 1 ? reportedCorrection : null,
+                        uncorrected: reportedCorrection > 1 ? reportedUncorrected : null, byPlatform: true };
                 }
-                const value = twoSided
-                    ? (sequential ? recalculateSequentialPValue : recalculatePValue)(item.sampleSize, metricType, effect, baseRate)
-                    : hypothesisPValue(recalculatePValue(item.sampleSize, metricType, effect, baseRate), effect, hyp, niMargin, sequential);
-                return { value, estimated: method === 'reported' };
+                const raw = twoSided
+                    ? (sequential ? recalculateSequentialPValue : recalculatePValue)(item.sampleSize, metricType, effect, rate, cv)
+                    : hypothesisPValue(recalculatePValue(item.sampleSize, metricType, effect, rate, cv), effect, hyp, niMargin, sequential);
+                const value = raw == null || arms < 2 ? raw : Math.min(1, raw * arms);
+                return { value, estimated: method === 'reported', correction: arms > 1 && raw != null ? arms : null,
+                    uncorrected: arms > 1 ? raw : null, byPlatform: false };
             };
-            const primary = pvalueFor(item.pvalue, item.primaryMetricType, item.primaryMetric, hypothesis);
-            const secondary = pvalueFor(item.secondaryPvalue, item.secondaryMetricType, item.secondaryMetric, 'two-sided');
+            const primary = pvalueFor(item.pvalue, item.primaryMetricType, item.primaryMetric, hypothesis, primaryCV, baseRate,
+                item.pvalueCorrection, item.pvalueUncorrected);
+            // A binary secondary uses its own control rate when the mapper
+            // gives one, else the primary's (the only rate known).
+            const secondaryRate = item.secondaryBaseRate ?? parent?.secondaryBaseRate ?? baseRate;
+            const secondary = pvalueFor(item.secondaryPvalue, item.secondaryMetricType, item.secondaryMetric, 'two-sided',
+                secondaryCV, secondaryRate);
             return {
                 ...item,
                 testMethod: recordedMethod,
@@ -521,8 +556,10 @@
                 powerApprox: sequential,
                 pvalue: primary.value,
                 pvalueEstimated: primary.estimated && primary.value != null,
+                pvalueCorrectionInfo: primary.correction ? primary : null,
                 secondaryPvalue: secondary.value,
-                secondaryPvalueEstimated: secondary.estimated && secondary.value != null
+                secondaryPvalueEstimated: secondary.estimated && secondary.value != null,
+                secondaryPvalueCorrectionInfo: secondary.correction ? secondary : null
             };
         }
 
@@ -829,7 +866,10 @@
         // `d` (the primary column only) adds the test's hypothesis to the
         // tooltip when it isn't the default two-sided one. The Method column
         // shows it at a glance.
-        function pvalueCell(colClass, pvalue, estimated, d = null) {
+        // `correction`: { correction, uncorrected, byPlatform } when the p is
+        // Bonferroni-corrected for several variants (see calculateStatsForItem).
+        // `missingReason`: why the platform gave no p-value, shown with an estimate.
+        function pvalueCell(colClass, pvalue, estimated, d = null, correction = null, missingReason = null) {
             if (pvalue == null) return `<td class="${colClass} pvalue"></td>`;
             const alpha = getPowerMethod() === 'sequential' ? SEQUENTIAL_ALPHA : getSelectedAlpha();
             const color = sensitivityColor(pvalueStrength(pvalue, alpha));
@@ -839,20 +879,64 @@
                 hypothesis === 'non-inferiority'
                     ? `Non-inferiority: one-sided test that the effect is better than −${d.niMarginUsed}% (margin from ${marginSource}).`
                     : hypothesis === 'superiority' ? 'Superiority: one-sided test that the effect is above 0.' : '',
-                estimated ? 'Estimated: the platform reported no p-value here, so it’s recalculated from the lift, sample size and baseline rate.' : ''
+                estimated && missingReason ? missingReason : '',
+                estimated ? 'Estimated: the platform reported no p-value here, so it’s recalculated from the lift, sample size and baseline rate.' : '',
+                correction
+                    ? `Bonferroni-corrected${correction.byPlatform ? ' by the platform' : ''}: `
+                        + (correction.uncorrected != null ? `${formatPValue(correction.uncorrected)} × ` : '× ')
+                        + `${correction.correction} comparisons with control${pvalue >= 1 ? ', capped at 1' : ''}.`
+                    : ''
             ].filter(Boolean).join(' ');
             const tip = tips ? ` data-tip="${escapeAttr(tips)}"` : '';
             const badge = estimated
                 ? `<span class="pvalue-text pvalue-badge pvalue-badge-est" style="color: ${color}; border-color: ${color}"${tip}>`
                 : `<span class="pvalue-text pvalue-badge" style="background-color: ${color}"${tip}>`;
-            return `<td class="${colClass} pvalue">${badge}${formatPValueHtml(pvalue)}</span></td>`;
+            // As reported, a platform p-value from a CUPED analysis says so:
+            // its variance reduction (from pre-experiment data) is why it can be
+            // tighter than Rerun's own recalculations, which cannot apply it.
+            const cupedNote = d?.cuped === true && !estimated && getPowerMethod() === 'reported'
+                ? `<span class="pvalue-note" data-tip="${escapeAttr('CUPED: the platform reduced variance using each user’s pre-experiment data, which narrows the error bars. Fixed horizon and Sequential recalculate from summary numbers and cannot apply it, so they read stricter for this test.')}">CUPED</span>`
+                : '';
+            return `<td class="${colClass} pvalue">${badge}${formatPValueHtml(pvalue)}</span>${cupedNote}</td>`;
+        }
+
+        // A run shorter than the 1-2 full weeks platforms advise: under 7 days
+        // covers no full weekly cycle (and is where early stopping shows);
+        // under 14 covers fewer than two. Null otherwise or without dates.
+        const SHORT_RUN_DAYS = 7;
+        const BRIEF_RUN_DAYS = 14;
+        function shortRun(d) {
+            const days = daysRunning(d);
+            if (days == null || days >= BRIEF_RUN_DAYS) return null;
+            return days < SHORT_RUN_DAYS
+                ? { days, label: `${days}-day run`, cls: 'sample-run-short',
+                    tip: `Ran only ${days} day${days === 1 ? '' : 's'}: no full weekly cycle, and short runs are where early stopping inflates effects. Platforms advise at least 1-2 full weeks.` }
+                : { days, label: `${days} days`, cls: 'sample-run-brief',
+                    tip: `Ran ${days} days: under two full weekly cycles, the 1-2 weeks platforms advise.` };
+        }
+
+        // The Started column: the start date (the end date when no start is
+        // recorded), how long the test ran underneath, and the exact dates on
+        // hover.
+        function renderStartedCell(item) {
+            const start = item.startDate || null;
+            const end = item.date || null;
+            if (!start && !end) return emptyCell();
+            const days = daysRunning(item);
+            const tip = start && end
+                ? `${formatLaunchDate(start)} to ${formatLaunchDate(end)}${days ? ` (${days} day${days === 1 ? '' : 's'})` : ''}`
+                : `Ended ${formatLaunchDate(end)}; no start date recorded`;
+            return `<span class="launch-date-value" data-tip="${escapeAttr(tip)}">${formatLaunchDate(start || end)}</span>`
+                + (days ? `<span class="run-days">${days} day${days === 1 ? '' : 's'}</span>` : '');
         }
 
         // Sample size, then up to two small lines under it: the prereg alert
-        // (when there is one) and the average daily rate (when the dates allow).
+        // (when there is one) and the average daily rate (when the dates
+        // allow), with the run length added when it was short.
         function renderSampleCell(d) {
             const prereg = preregAlert(d);
             const perDay = samplePerDay(d);
+            const run = shortRun(d);
             const count = formatNumber(d.sampleSize);
             if (!prereg && perDay == null) return `<div class="sample-size">${count}</div>`;
             return `<div class="sample-size-col">
@@ -861,7 +945,8 @@
                        <span class="sample-size-stat-label">${prereg.label}</span>`
                     : `<span class="sample-size">${count}</span>`}
                 ${perDay != null
-                    ? `<span class="sample-size-rate" data-tip="Averaged over ${daysRunning(d)} days, ${formatLaunchDate(d.startDate)} to ${formatLaunchDate(d.date)}.">${formatSamplePerDay(perDay)}</span>`
+                    ? `<span class="sample-size-rate"><span data-tip="Averaged over ${daysRunning(d)} days, ${formatLaunchDate(d.startDate)} to ${formatLaunchDate(d.date)}.">${formatSamplePerDay(perDay)}</span>${run
+                        ? ` · <span class="${run.cls}" data-tip="${escapeAttr(run.tip)}">${run.label}</span>` : ''}</span>`
                     : ''}
             </div>`;
         }
@@ -875,17 +960,17 @@
                 <td class="col-metric">
                     <div class="metric-container ${pm.cls}">
                         <span class="${pm.cls}">${pm.valueDisplay}</span>
-                        <span class="metric-label">${pm.labelDisplay}${d.primaryMetricType ? ` (${d.primaryMetricType})` : ''}</span>
+                        <span class="metric-label">${pm.labelDisplay}${d.primaryMetricType && (pm.labelDisplay || pm.valueDisplay) ? ` (${d.primaryMetricType})` : ''}</span>
                     </div>
                 </td>
-                ${pvalueCell('col-metric-p', d.pvalue, d.pvalueEstimated, d)}
+                ${pvalueCell('col-metric-p', d.pvalue, d.pvalueEstimated, d, d.pvalueCorrectionInfo, d.pvalueMissingReason)}
                 <td class="col-secondary">
                     <div class="metric-container secondary-metric ${sm.cls}">
                         <span class="${sm.cls}">${sm.valueDisplay}</span>
-                        <span class="metric-label">${sm.labelDisplay}${d.secondaryMetricType ? ` (${d.secondaryMetricType})` : ''}</span>
+                        <span class="metric-label">${sm.labelDisplay}${d.secondaryMetricType && (sm.labelDisplay || sm.valueDisplay) ? ` (${d.secondaryMetricType})` : ''}</span>
                     </div>
                 </td>
-                ${pvalueCell('col-secondary-p', d.secondaryPvalue, d.secondaryPvalueEstimated)}
+                ${pvalueCell('col-secondary-p', d.secondaryPvalue, d.secondaryPvalueEstimated, null, d.secondaryPvalueCorrectionInfo, d.secondaryPvalueMissingReason)}
                 <td class="col-sample">${renderSampleCell(d)}</td>
                 <td class="col-power">
                     <div class="power-group">
@@ -990,7 +1075,7 @@
             const item = viewRow.item;
             const parts = viewRow.kind === 'sub'
                 ? ['vs.', item.variationName, viewRow.experiment.name]
-                : [item.name, item.id, item.owner, formatLaunchDate(item.date), TEST_METHOD_ICONS[item.testMethod]?.label];
+                : [item.name, item.id, item.owner, item.ownerEmail, formatLaunchDate(item.startDate), formatLaunchDate(item.date), TEST_METHOD_ICONS[item.testMethod]?.label];
             parts.push(
                 item.change,
                 item.decision,
@@ -1008,7 +1093,7 @@
             let value;
             switch (column) {
                 case 'name': value = viewRow.kind === 'sub' ? (experiment.name || '') : (item.name || ''); break;
-                case 'date': value = viewRow.kind === 'sub' ? '' : (item.date || ''); break;
+                case 'date': value = viewRow.kind === 'sub' ? '' : (item.startDate || item.date || ''); break;
                 case 'method': value = viewRow.kind === 'sub' ? '' : (TEST_METHOD_ICONS[item.testMethod]?.label || ''); break;
                 case 'decision': value = item.decision || ''; break;
                 case 'change': value = item.change || ''; break;
@@ -1043,7 +1128,8 @@
                 secondary: secondaryDataAttr(item),
                 secondaryPvalue: numOrNaN(item.secondaryPvalue),
                 decision: item.decision || '',
-                hypothesis: item.hypothesis || 'two-sided'
+                hypothesis: item.hypothesis || 'two-sided',
+                days: daysRunning(item)
             }, config.params || {}) || false;
         }
 
@@ -1068,9 +1154,26 @@
         // Under the Method dropdown, in As reported mode: which methods the
         // tests actually used (each test's own testMethod), and how many
         // primary p-values had to be estimated for lack of a reported one.
+        // How Rerun's own Sequential (mSPRT) recalculation works, shown as the
+        // tooltip on the note under Method while it's selected. Keep in step
+        // with mSprtPValue's comment in stats-utils.js.
+        const SEQUENTIAL_NOTES = [
+            'Sequential (mSPRT) recalculates every test as if it had been run as an always-valid sequential test, so checking results early (peeking) is paid for.',
+            `Setting: mixing ratio r = ${SEQUENTIAL_MSPRT_R.toFixed(1)}, tuned to an effect the test is 80%-powered for: (1.96 + 0.84)². p < 0.05 then needs z ≈ 3.03 (fixed horizon: 1.96). Any r from about 5 to 10 gives z ≈ 3.0–3.1.`,
+            'Checked against Amplitude’s own mSPRT on 34 test arms: the same significant / not-significant call on 32 (the earlier r = 1, needing z ≈ 3.66, matched 28). The best fit there was r ≈ 6.5, practically the same threshold; r comes from the power rule, not that fit.',
+            'Tests with several variants: each p-value × the number of comparisons with control (Bonferroni), as platforms do.',
+            'Judged on the final numbers only. Platforms report the lowest p reached during a test and may reduce variance with CUPED, so their own (As reported) p-values can be lower. Power is approximate: fixed-horizon power at the sample size ÷ 1.3.'
+        ].join('\n\n');
+
         function updateMethodNote() {
             const note = document.getElementById('methodNote');
             if (!note) return;
+            delete note.dataset.tip;
+            if (getPowerMethod() === 'sequential') {
+                note.textContent = `mSPRT, r = ${SEQUENTIAL_MSPRT_R.toFixed(1)} · how it works`;
+                note.dataset.tip = SEQUENTIAL_NOTES;
+                return;
+            }
             if (getPowerMethod() !== 'reported') { note.textContent = ''; return; }
             // A test with no recorded method is read as sequential (see
             // calculateStatsForItem), so the note says so rather than "unknown".
@@ -1165,7 +1268,8 @@
             primary: 'td.col-metric',
             primaryP: 'td.col-metric-p',
             secondary: 'td.col-secondary',
-            secondaryP: 'td.col-secondary-p'
+            secondaryP: 'td.col-secondary-p',
+            sample: 'td.col-sample'
         };
 
         // Per-tab editable highlighting parameters. Values here are the live,
@@ -1277,24 +1381,27 @@
                 },
                 template: p => [
                     'Highlight when', { param: 'decisionFilter' },
-                    'and (effect is negative, p-value >', { param: 'pMin' }, ' or secondary contradicts)'
+                    'and (effect is negative, p-value >', { param: 'pMin' }, ', secondary contradicts or ran under 7 days)'
                 ],
                 // Any shipped result the data doesn't back up, whatever its size:
-                // a negative effect, a primary that wasn't significant, or a
+                // a negative effect, a primary that wasn't significant, a
                 // significant primary propped up by a secondary that doesn't back
-                // it up (not significant itself, or pointing the other way).
+                // it up (not significant itself, or pointing the other way), or a
+                // run under SHORT_RUN_DAYS: no full weekly cycle, which is where
+                // early stopping inflates effects, whatever the p-value.
                 //
                 // A non-inferiority test is judged only on its own p-value (that
                 // the effect is above -margin): a small loss within the margin is
                 // what it set out to allow, and a quiet secondary doesn't
                 // contradict a "no worse" claim. So it's flagged only when that
                 // p-value didn't clear the threshold -- no harm wasn't shown.
-                matches: ({ metric, pvalue, secondary, secondaryPvalue, decision, hypothesis }, p) =>
+                matches: ({ metric, pvalue, secondary, secondaryPvalue, decision, hypothesis, days }, p) =>
                     decisionMatches(decision, p.decisionFilter.value)
                     && (hypothesis === 'non-inferiority'
                         ? pvalue > p.pMin.value
                         : metric < 0 || pvalue > p.pMin.value
-                            || contradictingSecondary(metric, secondary, secondaryPvalue)),
+                            || contradictingSecondary(metric, secondary, secondaryPvalue)
+                            || (days != null && days < SHORT_RUN_DAYS)),
                 signals: {
                     decision: decisionSignal,
                     primary: ({ metric, hypothesis }) => hypothesis !== 'non-inferiority' && metric < 0,
@@ -1302,7 +1409,9 @@
                     secondary: ({ metric, secondary, secondaryPvalue, hypothesis }) =>
                         hypothesis !== 'non-inferiority' && contradictingSecondary(metric, secondary, secondaryPvalue),
                     secondaryP: ({ metric, secondary, secondaryPvalue, hypothesis }) =>
-                        hypothesis !== 'non-inferiority' && contradictingSecondary(metric, secondary, secondaryPvalue)
+                        hypothesis !== 'non-inferiority' && contradictingSecondary(metric, secondary, secondaryPvalue),
+                    sample: ({ days, hypothesis }) =>
+                        hypothesis !== 'non-inferiority' && days != null && days < SHORT_RUN_DAYS
                 }
             },
             'false-neg': {
@@ -2386,8 +2495,11 @@
                 <td class="col-iteration">${emptyCell()}</td>
                 <td class="col-owner">${emptyCell()}</td>`;
             }
+            // A name read from an email (Amplitude) keeps the email in its tooltip.
+            const ownerTip = item.ownerEmail && item.ownerEmail !== item.owner
+                ? ` data-tip="${escapeAttr(item.ownerEmail)}"` : '';
             const ownerHTML = item.owner
-                ? `<a href="#" class="owner-link">${item.owner}</a>`
+                ? `<a href="#" class="owner-link"${ownerTip}>${escapeHtml(item.owner)}</a>`
                 : emptyCell();
             const reach = displayValue(item.traffic, '%');
             // What the % is out of: "of traffic" unless the mapper says
@@ -2506,7 +2618,7 @@
                         <div class="rerun-reference-strip"></div>
                     </div>
                 </td>
-                <td class="col-started launch-date">${formatLaunchDate(experiment.date)}</td>
+                <td class="col-started launch-date">${renderStartedCell(experiment)}</td>
                 ${renderTestMethodCell(experiment)}
                 ${renderDecisionCell(experiment)}
                 ${renderMetricCells(experiment)}
@@ -2889,7 +3001,8 @@
                         pvalue: numOrNaN(item.pvalue),
                         secondary: secondaryDataAttr(item),
                         secondaryPvalue: numOrNaN(item.secondaryPvalue),
-                        hypothesis: item.hypothesis || 'two-sided'
+                        hypothesis: item.hypothesis || 'two-sided',
+                        days: daysRunning(item)
                     });
                 }
             });
@@ -3299,7 +3412,8 @@
                     || localStorage.getItem(DIALOG_PLATFORM_KEY);
             } catch (e) { /* storage blocked: open blank */ }
             const radio = platform && document.querySelector(`input[name="platform"][value="${platform}"]`);
-            if (!radio) return;
+            // Not a platform that can be chosen (yet): open blank.
+            if (!radio || radio.disabled) return;
             radio.checked = true;
             showPlatformFields(platform);
         }
@@ -3885,7 +3999,8 @@
             const remaining = amplitudeAll ? unloadedAmplitude().length : null;
             const more = remaining === null ? true
                 : remaining > 0 ? Math.min(remaining, nextAmplitudeBatch(amplitudeLoaded.length)) : 0;
-            showResultsStatus('Amplitude', amplitudeLoaded, {
+            // Counted like the table: finished experiments only.
+            showResultsStatus('Amplitude', amplitudeLoaded.filter(exp => AmplitudeMapper.isAnalyzable(exp)), {
                 extra: remaining > 0 ? `${amplitudeAll.length} in Amplitude` : '',
                 links: more ? [{ label: more === true ? 'Load more' : `Load ${more} more`, onClick: loadMoreAmplitude }] : [],
                 refresh: apiKey => fetchAmplitudeData(apiKey),
@@ -4169,8 +4284,16 @@
                     const stored = justSignedIn ? null : await readStoredImportData();
                     // The cache holds raw experiments; an older cache of mapped
                     // rows (no `variants`) is refetched rather than misread.
-                    const cached = stored?.[0]?.variants ? stored : null;
+                    let cached = stored?.[0]?.variants ? stored : null;
                     if (cached) {
+                        // A cache from before variant code was trimmed: trim
+                        // it now and save the smaller copy back, once.
+                        const slimmed = cached.map(exp => AmplitudeMapper.slim(exp));
+                        if (slimmed.some((exp, i) => exp !== cached[i])) {
+                            cached = slimmed;
+                            saveImportConfig('amplitude', { apiKey, mappedData: cached })
+                                .catch(error => console.warn('Could not save the trimmed Amplitude copy:', error));
+                        }
                         // A cache from before per-experiment saving: an
                         // experiment with results there was complete.
                         cached.forEach(exp => {
@@ -4200,6 +4323,17 @@
                     const cached = stored?.[0]?._host ? stored : null;
                     const apiKey = getSavedApiKey();
                     if (!cached && !apiKey) return false;
+                    // A cache from before results were trimmed: trim the
+                    // query text and session samples now, and save it back once.
+                    if (cached?.some(exp => Object.values(exp._results || {}).some(r => r?.hogql || r?.clickhouse_sql))) {
+                        cached.forEach(exp => {
+                            for (const role of Object.keys(exp._results || {})) {
+                                exp._results[role] = PostHogMapper.slimResult(exp._results[role]);
+                            }
+                        });
+                        saveImportConfig('posthog', { apiKey, mappedData: cached })
+                            .catch(error => console.warn('Could not save the trimmed PostHog copy:', error));
+                    }
 
                     apiConfig.platform = platform;
                     apiConfig.apiKey = apiKey || '';
@@ -5648,11 +5782,15 @@
 
             // 1. Testing Sensitivity
             const container = document.getElementById('sensitivityThresholds');
+            // Power needs a continuous metric's spread (primaryCV); tests
+            // without it can't be judged, so they're left out rather than
+            // counted as underpowered.
+            const powerAt = (exp, mde) => recalculatePower(exp.sampleSize, exp.primaryMetricType, mde, getExperimentBaseRate(exp), exp.primaryCV);
+            const sized = experiments.filter(exp => powerAt(exp, 10) !== null);
             // % of experiments powered at a given MDE
-            const poweredPctAt = mde => 100 * experiments.filter(exp => {
-                const power = recalculatePower(exp.sampleSize, exp.primaryMetricType, mde, exp.baseRate || 5);
-                return power !== null && power >= POWER_THRESHOLD;
-            }).length / total;
+            const poweredPctAt = mde => sized.length
+                ? 100 * sized.filter(exp => powerAt(exp, mde) >= POWER_THRESHOLD).length / sized.length
+                : 0;
 
             // The MDE this one experiment's own sample size is actually
             // sensitive to at 80% power -- the threshold sweep's per-column
@@ -5660,7 +5798,7 @@
             // caught?" Power rises monotonically with MDE, so a binary
             // search inverts recalculatePower without needing a closed form.
             function mdeAt80Power(exp) {
-                const power = mde => recalculatePower(exp.sampleSize, exp.primaryMetricType, mde, exp.baseRate || 5);
+                const power = mde => powerAt(exp, mde);
                 if (power(MDE_SEARCH_MAX) < POWER_THRESHOLD) return null; // not even reached at the search ceiling
                 let lo = 0, hi = MDE_SEARCH_MAX;
                 for (let i = 0; i < 30; i++) {

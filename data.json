@@ -13,6 +13,7 @@
     "secondaryMetric": 5,
     "secondaryMetricLabel": "adds to cart",
     "secondaryMetricType": "binary",
+    "secondaryBaseRate": 9,
     "sampleSize": 2400000,
     "baseRate": 3.2,
     "triggered": [
@@ -42,6 +43,7 @@
     "secondaryMetric": -7,
     "secondaryMetricLabel": "revenue",
     "secondaryMetricType": "continuous",
+    "secondaryCV": 12,
     "sampleSize": 52000,
     "baseRate": 4.8,
     "triggered": [
@@ -70,6 +72,7 @@
     "secondaryMetric": 34,
     "secondaryMetricLabel": "checkout visits",
     "secondaryMetricType": "binary",
+    "secondaryBaseRate": 14,
     "sampleSize": 14000,
     "baseRate": 2.1,
     "triggered": [
@@ -95,6 +98,7 @@
     "secondaryMetric": 12,
     "secondaryMetricLabel": "checkout visits",
     "secondaryMetricType": "binary",
+    "secondaryBaseRate": 14,
     "sampleSize": 22000,
     "baseRate": 2.1,
     "triggered": [
@@ -124,6 +128,7 @@
     "secondaryMetric": -4,
     "secondaryMetricLabel": "adds to cart",
     "secondaryMetricType": "binary",
+    "secondaryBaseRate": 9,
     "sampleSize": 310000,
     "baseRate": 5.5,
     "triggered": [
@@ -152,6 +157,7 @@
     "secondaryMetric": 4,
     "secondaryMetricLabel": "adds to cart",
     "secondaryMetricType": "binary",
+    "secondaryBaseRate": 9,
     "sampleSize": 3100000,
     "baseRate": 4.2,
     "triggered": [
@@ -184,6 +190,7 @@
     "secondaryMetric": -34,
     "secondaryMetricLabel": "clicks on listings",
     "secondaryMetricType": "binary",
+    "secondaryBaseRate": 35,
     "sampleSize": 45000,
     "baseRate": 6.3,
     "triggered": [
@@ -209,6 +216,7 @@
     "secondaryMetric": 10,
     "secondaryMetricLabel": "revenue",
     "secondaryMetricType": "continuous",
+    "secondaryCV": 12,
     "sampleSize": 280000,
     "baseRate": 1.8,
     "iterations": 2,
@@ -239,6 +247,7 @@
     "secondaryMetric": -12,
     "secondaryMetricLabel": "checkouts",
     "secondaryMetricType": "binary",
+    "secondaryBaseRate": 6,
     "sampleSize": 55000,
     "baseRate": 7.1,
     "triggered": [
@@ -268,6 +277,7 @@
     "secondaryMetric": -2,
     "secondaryMetricLabel": "adds to cart",
     "secondaryMetricType": "binary",
+    "secondaryBaseRate": 9,
     "sampleSize": 2700000,
     "baseRate": 3.5,
     "triggered": [
@@ -294,6 +304,7 @@
     "secondaryMetric": 6.1,
     "secondaryMetricLabel": "revenue",
     "secondaryMetricType": "continuous",
+    "secondaryCV": 12,
     "sampleSize": 98000,
     "baseRate": 5.4,
     "iterations": 2,
@@ -333,6 +344,7 @@
     "secondaryMetric": 3.2,
     "secondaryMetricLabel": "revenue",
     "secondaryMetricType": "continuous",
+    "secondaryCV": 12,
     "sampleSize": 320000,
     "baseRate": 12.5,
     "iterations": 2,
@@ -379,6 +391,7 @@
     "secondaryMetric": 1.8,
     "secondaryMetricLabel": "revenue",
     "secondaryMetricType": "continuous",
+    "secondaryCV": 12,
     "sampleSize": 19000,
     "baseRate": 9.2,
     "iterations": 3,
@@ -429,6 +442,7 @@
     "secondaryMetric": 3.1,
     "secondaryMetricLabel": "revenue",
     "secondaryMetricType": "continuous",
+    "secondaryCV": 12,
     "sampleSize": 14000,
     "baseRate": 4.6,
     "triggered": [
@@ -457,6 +471,7 @@
     "secondaryMetric": 7.4,
     "secondaryMetricLabel": "revenue",
     "secondaryMetricType": "continuous",
+    "secondaryCV": 12,
     "sampleSize": 480000,
     "baseRate": 8.3,
     "iterations": 2,
@@ -484,6 +499,7 @@
     "secondaryMetric": 0.2,
     "secondaryMetricLabel": "opens",
     "secondaryMetricType": "binary",
+    "secondaryBaseRate": 22,
     "sampleSize": 1850000,
     "baseRate": 2.4,
     "triggered": [
@@ -510,6 +526,7 @@
     "secondaryMetric": -8.2,
     "secondaryMetricLabel": "time on page",
     "secondaryMetricType": "continuous",
+    "secondaryCV": 1.4,
     "sampleSize": 260000,
     "baseRate": 5.9,
     "triggered": [
@@ -538,6 +555,7 @@
     "secondaryMetric": 4.9,
     "secondaryMetricLabel": "average order value",
     "secondaryMetricType": "continuous",
+    "secondaryCV": 0.8,
     "sampleSize": 76000,
     "baseRate": 6.7,
     "iterations": 2,
@@ -589,6 +607,7 @@
     "secondaryMetric": 1.4,
     "secondaryMetricLabel": "scroll depth",
     "secondaryMetricType": "continuous",
+    "secondaryCV": 0.5,
     "sampleSize": 11500,
     "baseRate": 3.8,
     "triggered": [
@@ -614,6 +633,7 @@
     "secondaryMetric": 5.5,
     "secondaryMetricLabel": "revenue",
     "secondaryMetricType": "continuous",
+    "secondaryCV": 12,
     "sampleSize": 135000,
     "baseRate": 9.4,
     "triggered": [
@@ -637,9 +657,11 @@
     "primaryMetric": 3.2,
     "primaryMetricLabel": "revenue per visitor",
     "primaryMetricType": "continuous",
+    "primaryCV": 12,
     "secondaryMetric": 2.6,
     "secondaryMetricLabel": "items per order",
     "secondaryMetricType": "continuous",
+    "secondaryCV": 0.7,
     "sampleSize": 210000,
     "baseRate": 7.2,
     "iterations": 3,
@@ -667,6 +689,7 @@
     "secondaryMetric": 0.9,
     "secondaryMetricLabel": "search exits",
     "secondaryMetricType": "binary",
+    "secondaryBaseRate": 18,
     "sampleSize": 420000,
     "baseRate": 11.3,
     "iterations": 3,
@@ -696,6 +719,7 @@
     "secondaryMetric": -14.1,
     "secondaryMetricLabel": "bounce rate",
     "secondaryMetricType": "binary",
+    "secondaryBaseRate": 45,
     "sampleSize": 890000,
     "baseRate": 4.1,
     "triggered": [
@@ -737,6 +761,7 @@
     "secondaryMetric": 0.4,
     "secondaryMetricLabel": "revenue",
     "secondaryMetricType": "continuous",
+    "secondaryCV": 12,
     "sampleSize": 2400000,
     "baseRate": 12,
     "triggered": [
@@ -763,6 +788,7 @@
     "secondaryMetric": -0.6,
     "secondaryMetricLabel": "gallery interactions",
     "secondaryMetricType": "binary",
+    "secondaryBaseRate": 12,
     "sampleSize": 46000,
     "baseRate": 7.2,
     "triggered": [

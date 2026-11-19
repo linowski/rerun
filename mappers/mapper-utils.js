@@ -60,6 +60,20 @@ const MapperUtils = {
         return shipped.some(keyword => text.includes(keyword)) ? 'Shipped' : '';
     },
 
+    // A display name from an email's local part: "jane.doe@example.com"
+    // -> "Jane Doe", "sam@example.com" -> "Sam". Anything that is
+    // not an email is returned as is.
+    nameFromEmail(value) {
+        const text = String(value || '').trim();
+        const at = text.indexOf('@');
+        if (at < 1) return text;
+        const words = text.slice(0, at).split(/[._\-+]+/)
+            .map(word => word.replace(/\d+/g, ''))
+            .filter(Boolean);
+        if (!words.length) return text;
+        return words.map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ');
+    },
+
     percentFromRatio(value) {
         if (value === null || value === undefined || value === '') return null;
         const number = Number(value);

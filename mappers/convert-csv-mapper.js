@@ -39,6 +39,15 @@ const ConvertCSVMapper = {
         return this.mapRows(rows, accountId);
     },
 
+    // "YYYY-MM-DD" from an ISO date or a Unix timestamp in seconds; null
+    // for anything else.
+    isoDate(value) {
+        const text = String(value || '').trim();
+        if (!text) return null;
+        const date = /^\d{9,11}$/.test(text) ? new Date(Number(text) * 1000) : new Date(text);
+        return Number.isNaN(date.getTime()) ? null : date.toISOString().slice(0, 10);
+    },
+
     /**
      * Parse a CSV line handling quoted values
      * @param {string} line - Single CSV line
@@ -86,6 +95,10 @@ const ConvertCSVMapper = {
                     experienceName: row.experiencename || row.experience_name || '',
                     projectId: row.projectid || row.project_id || '',
                     projectName: row.projectname || row.project_name || '',
+                    // The aggregated report has no dates; an export that adds
+                    // them (started/stopped) fills the Started column.
+                    startedAt: row.started_at || row.startedat || row.start_date || '',
+                    stoppedAt: row.stopped_at || row.stoppedat || row.end_date || '',
                     goalId: goalId,
                     variations: []
                 };
@@ -169,6 +182,8 @@ const ConvertCSVMapper = {
                 experimentsByExpId[expId] = {
                     id: expId,
                     name: group.experienceName || `Experiment ${expId}`,
+                    startDate: this.isoDate(group.startedAt),
+                    date: this.isoDate(group.stoppedAt),
                     url: url,
                     projectId: group.projectId,
                     projectName: group.projectName,
@@ -180,7 +195,11 @@ const ConvertCSVMapper = {
                     secondaryMetricType: 'continuous',
                     pvalue: pvalue,
                     sampleSize: sampleSize,
-                    baseRate: control.conversionRate,
+                    // A percentage computed from the counts, so it holds whether
+                    // the export's conversion_rate column is a percent or a fraction.
+                    baseRate: control.visitors > 0
+                        ? Math.round(control.conversions / control.visitors * 100 * 10000) / 10000
+                        : control.conversionRate,
                     power: null,
                     // Convert's aggregated CSV lists variation arms, not test iteration history.
                     // Default imported experiments to first-time unless a future export field says otherwise.

@@ -229,7 +229,7 @@ const PostHogMapper = {
                 throw fail(`results query failed (${error.message})`, error);
             }
             if (response?.baseline) {
-                experiment._results[role] = response;
+                experiment._results[role] = this.slimResult(response);
             } else {
                 // Most likely still computing: try again next load.
                 console.log(`PostHog: unexpected ${role} result for "${experiment.name}":`, response);
@@ -280,6 +280,23 @@ const PostHogMapper = {
         if (!result?.baseline) return null;
         return (result.variant_results || [])
             .reduce((sum, v) => sum + (v.number_of_samples || 0), result.baseline.number_of_samples || 0);
+    },
+
+    // A results reply without what Rerun never reads before it is saved: the
+    // generated query text and per-step session samples, which can outweigh
+    // the numbers many times over.
+    slimResult(response) {
+        const { hogql, clickhouse_sql, ...rest } = response;
+        const slimArm = arm => {
+            if (!arm || typeof arm !== 'object') return arm;
+            const { step_sessions, ...kept } = arm;
+            return kept;
+        };
+        return {
+            ...rest,
+            baseline: slimArm(rest.baseline),
+            variant_results: (rest.variant_results || []).map(slimArm)
+        };
     },
 
     // Whether a saved experiment's results may be out of date: PostHog bumps
@@ -347,8 +364,37 @@ const PostHogMapper = {
             pvalue,
             sampleSize: (result.baseline.number_of_samples || 0) + (variant.number_of_samples || 0),
             baseRate: this.isBinary(metric) && control !== null ? Math.round(control * 10000) / 100 : null,
+            cv: this.isBinary(metric) ? null : this.controlCV(result.baseline, metric.metric_type),
+            // Why PostHog gave no p-value or chance to win, when it didn't.
+            pvalueReason: pvalue === null
+                ? this.describeFailures([...(variant.validation_failures || []), ...(result.baseline.validation_failures || [])])
+                : null,
             method: variant.method || null
         };
+    },
+
+    // PostHog's validation failures in plain words; a generic note when it
+    // gave none.
+    describeFailures(failures) {
+        const words = {
+            'not-enough-exposures': 'not enough exposures',
+            'baseline-mean-is-zero': 'the control had no conversions',
+            'not-enough-metric-data': 'not enough conversions in an arm (e.g. none in the variant)'
+        };
+        const reasons = [...new Set(failures)].map(f => words[f] || String(f).replace(/-/g, ' '));
+        return reasons.length ? reasons.join('; ') : 'no reason given';
+    },
+
+    // A mean metric's spread in the control arm, SD / mean, from its sum and
+    // sum of squares (variance = sum_squares / n - mean^2). Null for ratio
+    // and quantile metrics, whose spread these sums do not give.
+    controlCV(stats, metricType) {
+        if (metricType !== 'mean' || !stats?.number_of_samples) return null;
+        const n = stats.number_of_samples;
+        const mean = stats.sum / n;
+        const variance = stats.sum_squares / n - mean * mean;
+        if (!(mean > 0) || !(variance >= 0)) return null;
+        return Math.sqrt(variance) / mean;
     },
 
     isBinary(metric) {
@@ -414,13 +460,15 @@ const PostHogMapper = {
     screenshots(experiment) {
         const ids = experiment.parameters?.variant_screenshot_media_ids || {};
         const keys = [this.controlKey(experiment), ...this.variantKeys(experiment)];
+        // "Shot 2" only means something when some arm has more than one.
+        const numbered = keys.some(key => (Array.isArray(ids[key]) ? ids[key].filter(Boolean) : []).length > 1);
         return keys.flatMap((key, armIndex) => (Array.isArray(ids[key]) ? ids[key] : [])
             .filter(Boolean)
             .map((mediaId, shot) => ({
                 arm: String.fromCharCode(65 + armIndex),
                 armLabel: key,
                 viewport: null,
-                pageState: `Shot ${shot + 1}`,
+                pageState: numbered ? `Shot ${shot + 1}` : null,
                 file: String(mediaId).startsWith('data:')
                     ? mediaId
                     : `${experiment._host}/uploaded_media/${mediaId}`
@@ -615,7 +663,18 @@ const PostHogMapper = {
             secondaryPvalue: secondary?.pvalue ?? null,
             sampleSize: primary?.sampleSize || 0,
             baseRate: primary?.baseRate ?? null,
+            primaryCV: primary?.cv ?? null,
+            secondaryCV: secondary?.cv ?? null,
+            // The secondary's own base rate, so an estimate of its p-value
+            // doesn't borrow the primary's.
+            secondaryBaseRate: secondary?.baseRate ?? null,
+            pvalueMissingReason: primary?.pvalueReason ? `PostHog reported no p-value: ${primary.pvalueReason}.` : null,
+            secondaryPvalueMissingReason: secondary?.pvalueReason ? `PostHog reported no p-value: ${secondary.pvalueReason}.` : null,
             testMethod: this.testMethod(experiment, primary?.method),
+            // CUPED variance reduction in PostHog's analysis (true / false;
+            // null when the experiment leaves it to the project default).
+            cuped: typeof experiment.stats_config?.cuped?.enabled === 'boolean'
+                ? experiment.stats_config.cuped.enabled : null,
             decision: this.decision(experiment),
             triggered: this.triggers(experiment),
             ...this.reach(experiment),
