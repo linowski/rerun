@@ -930,9 +930,9 @@
                 + (days ? `<span class="run-days">${days} day${days === 1 ? '' : 's'}</span>` : '');
         }
 
-        // Sample size, then up to two small lines under it: the prereg alert
-        // (when there is one) and the average daily rate (when the dates
-        // allow), with the run length added when it was short.
+        // Sample size, then small lines under it: the prereg alert (when
+        // there is one), the average daily rate (when the dates allow), and
+        // the run length when it was short.
         function renderSampleCell(d) {
             const prereg = preregAlert(d);
             const perDay = samplePerDay(d);
@@ -945,8 +945,10 @@
                        <span class="sample-size-stat-label">${prereg.label}</span>`
                     : `<span class="sample-size">${count}</span>`}
                 ${perDay != null
-                    ? `<span class="sample-size-rate"><span data-tip="Averaged over ${daysRunning(d)} days, ${formatLaunchDate(d.startDate)} to ${formatLaunchDate(d.date)}.">${formatSamplePerDay(perDay)}</span>${run
-                        ? ` · <span class="${run.cls}" data-tip="${escapeAttr(run.tip)}">${run.label}</span>` : ''}</span>`
+                    ? `<span class="sample-size-rate" data-tip="Averaged over ${daysRunning(d)} days, ${formatLaunchDate(d.startDate)} to ${formatLaunchDate(d.date)}.">${formatSamplePerDay(perDay)}</span>`
+                    : ''}
+                ${run
+                    ? `<span class="sample-size-rate ${run.cls}" data-tip="${escapeAttr(run.tip)}">${run.label}</span>`
                     : ''}
             </div>`;
         }
