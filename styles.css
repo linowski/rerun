@@ -472,6 +472,12 @@ h1 {
     font-size: 11px;
 }
 
+/* The Don't Rerun tab counts a list of decisions, not rule matches: grey. */
+.declined-count-badge {
+    background-color: var(--surface-soft);
+    color: var(--text-subtle);
+}
+
 /* Scaled against the Rerun tab's larger 62px icon, so it reads at the same
    visual weight as the 18px badges on the 40px scenario icons. */
 .rerun-count-badge {
@@ -797,6 +803,17 @@ tbody tr:hover {
     transform: scale(1);
 }
 
+/* Decided (set to rerun or to don't rerun), panel closed: full blue, not
+   faint. Only when set -- undecided tests keep the faint tile. */
+.rerun-row-btn.decided {
+    opacity: 1;
+    transform: scale(1);
+}
+
+.rerun-row-btn.decided:hover {
+    opacity: 0.8;
+}
+
 /* On the Rerun tab, which scenario an entry was planned from -- sits under
    the rerun button, which now always shows the test type instead of standing
    in for this. Full strength: it's provenance worth reading, not a disabled
@@ -855,6 +872,13 @@ tbody tr:hover {
 
 .rerun-row-btn.showing-type .rerun-row-btn-type {
     display: flex;
+}
+
+/* On the Rerun tab every row is a decided entry (its panel always shown), so
+   its type tile is the "decided" blue; black stays for a panel opened from a
+   scenario tab. */
+tr[data-instance-id] .rerun-row-btn-type {
+    background-color: var(--accent);
 }
 
 tr.checkbox-selected {
@@ -1239,17 +1263,18 @@ th.col-power {
     cursor: default;
 }
 
-/* Tagged for rerun: now it links, to the row's entry in the Rerun list. */
-.experiment-name-link {
-    color: var(--accent);
+/* With a platform URL the name links to the experiment there: same colour
+   as a plain name, underlined on hover. */
+a.experiment-name-link {
     cursor: pointer;
 }
 
-.experiment-name-link:hover {
+a.experiment-name-link:hover {
     text-decoration: underline;
+    text-underline-offset: 3px;
 }
 
-.experiment-name-link:focus-visible {
+a.experiment-name-link:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
     border-radius: 3px;
@@ -1469,6 +1494,29 @@ tr.checkbox-selected .rerun-compound-check {
     font-weight: 400;
     color: var(--text-faint);
     font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+}
+
+/* A tiny screenshot preview on the ID line (renderRowThumb): the top of the
+   page, which is what identifies a test at a glance. */
+.row-thumb-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.row-thumb {
+    width: 40px;
+    height: 28px;
+    object-fit: cover;
+    object-position: top;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    background-color: var(--surface);
+}
+
+.row-thumb-more {
+    font-size: 11px;
+    color: var(--text-faint);
 }
 
 /* "Reruns: [icon] [icon]" on its own line under the experiment id -- the only
@@ -2645,10 +2693,89 @@ tbody tr.rerun-note-row:hover > td {
     border-color: var(--accent-dark);
 }
 
-/* Holds Rerun alongside Rerun as Compound, once a second button appears. */
+/* The Notes label over its field, like the Test type label. */
+.rerun-notes-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    align-self: stretch;
+}
+
+/* Holds Rerun alongside Don't rerun (and Rerun as Compound when shown). */
 .rerun-panel-actions {
     display: flex;
+    align-items: center;
     gap: 8px;
+}
+
+/* "Don't rerun": a peer of Rerun (one decision, two choices), so it looks
+   the same: blue until chosen, black once chosen (.is-selected). */
+.rerun-panel-btn-decline {
+    color: #fff;
+    background-color: var(--accent);
+    border: 1px solid var(--accent);
+}
+
+.rerun-panel-btn-decline[aria-disabled="true"] {
+    opacity: 0.45;
+    cursor: default;
+}
+
+.rerun-panel-btn-decline:not([aria-disabled="true"]):hover {
+    background-color: var(--accent-dark);
+    border-color: var(--accent-dark);
+}
+
+/* "+ Add another": a quiet text action after the two decisions. */
+.rerun-panel-btn-link {
+    padding: 6px 4px;
+    color: var(--accent);
+    background: none;
+    border: none;
+    font-weight: 500;
+}
+
+.rerun-panel-btn-link:hover {
+    text-decoration: underline;
+}
+
+/* Remove: quieter than "+ Add another", since it deletes. */
+.rerun-panel-btn-remove {
+    color: var(--text-subtle);
+}
+
+/* Decided: filled, like the app's other selected states (black). */
+.rerun-panel-btn-add.is-selected,
+.rerun-panel-btn-add.is-selected:hover,
+.rerun-panel-btn-decline.is-selected {
+    color: #fff;
+    background-color: var(--text-strong);
+    border-color: var(--text-strong);
+}
+
+.rerun-panel-btn-decline.is-selected:hover {
+    background-color: #000;
+    border-color: #000;
+}
+
+
+/* On the Don't Rerun tab: why, under the test's name. */
+.declined-reason {
+    margin-top: 2px;
+    font-size: 12px;
+    color: var(--text-subtle);
+}
+
+/* Decided "Don't rerun": the scenario's amber highlight and its signal
+   tints drop away (the decision is made, nothing left to look at), and the
+   rerun icon shows a diagonal instead of arrows (iconRerunDeclined.svg). The
+   row still counts as a match for the scenario. */
+tr.highlighted-row.row-declined {
+    background-color: transparent;
+}
+
+tr.row-declined td.signal-on::before {
+    display: none;
 }
 
 /* Blue like every other button -- black is for selected/decided *state*

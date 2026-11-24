@@ -105,7 +105,7 @@ The source code in this repository is licensed under the [MIT License](LICENSE).
 
 ## Third-Party Assets
 
-The icons in `images/` (except `iconFlag.svg`, drawn for this project) are from [Streamline](https://streamlinehq.com), used
+The icons in `images/` (except `iconFlag.svg` and the `iconRerunDeclined` pair, drawn for this project) are from [Streamline](https://streamlinehq.com), used
 under a [Streamline Premium license](https://help.streamlinehq.com/en/articles/5354366-streamline-premium-licenses).
 They are not covered by the MIT license above. Streamline Premium terms permit
 use within an open-source project with attribution, but do not permit

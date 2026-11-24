@@ -234,6 +234,14 @@
                 </span>
                 <span class="tab-label">Rerun</span>
             </button>
+            <!-- Shown only while some loaded test is decided "Don't rerun" (see updateDeclinedTab). -->
+            <button class="tab" data-tab="declined" style="display: none;">
+                <span class="tab-icon-wrap">
+                    <img src="images/iconRerunDeclined.svg" data-default="images/iconRerunDeclined.svg" data-selected="images/iconRerunDeclined_Sel.svg" alt="Don't Rerun" class="tab-icon">
+                    <span id="declinedTabCount" class="tab-count-badge declined-count-badge">0</span>
+                </span>
+                <span class="tab-label">Don't Rerun</span>
+            </button>
             <button class="tab active" data-tab="almost-significant">
                 <span class="tab-icon-wrap">
                     <img src="images/iconAlmostSig.png" data-default="images/iconAlmostSig.png" data-selected="images/iconAlmostSig_Sel.png" alt="Almost Significant" class="tab-icon">
@@ -311,7 +319,7 @@
             <!-- Rerun tab: save the list to a JSON file, or load one saved earlier. -->
             <div id="rerunActionsPanel" class="tab-params-panel">
                 <span class="tab-param-text">Rerun list file:</span>
-                <button type="button" id="rerunExportBtn" class="import-status-refresh" data-tip="Download this list (types, notes, tags) as JSON. It links to experiments by id, so import it alongside the same data.">Export JSON</button>
+                <button type="button" id="rerunExportBtn" class="import-status-refresh" data-tip="Download this list (types, notes, tags) and the Don’t rerun decisions as JSON. It links to experiments by id, so import it alongside the same data.">Export JSON</button>
                 <span class="tab-param-text">·</span>
                 <button type="button" id="rerunImportBtn" class="import-status-refresh" data-tip="Add the entries from a rerun list file to this list. Entries for experiments not loaded right now are kept, and show once that data is loaded.">Import JSON</button>
                 <input type="file" id="rerunImportInput" accept=".json,application/json" hidden>
@@ -1204,6 +1212,7 @@
             view.rows = buildViewRows(calculatedExperimentsData);
             view.page = 0;
             syncRerunEntriesToDataset();
+            updateDeclinedTab();
             const activeTab = document.querySelector('.tab.active');
             if (activeTab) {
                 updateHighlighting(activeTab.dataset.tab, { keepSort: keepPage });
@@ -1301,6 +1310,13 @@
         }
 
         const TAB_CONFIG = {
+            // Not a rule: lists the tests decided "Don't rerun" (filterViewRows,
+            // updateTitle), so nothing on it is highlighted.
+            declined: {
+                title: 'Decided Not To Rerun',
+                subtitle: 'Tests decided not to rerun, with the reasons noted.',
+                matches: () => false
+            },
             rerun: {
                 title: 'Your Rerun List',
                 subtitle: 'Plan a rerun from any tab: open a test’s rerun panel and press Rerun.'
@@ -1510,11 +1526,37 @@
         // Each is { id, key, name, ...details } with tags as an array.
         let hiddenReruns = [];
 
+        // Tests decided "Don't rerun", by selection key: { name, note, origin,
+        // at }. A decision about the test, so it applies on every scenario tab.
+        // `name` is the experiment's name when decided: a decision only applies
+        // while the loaded test still has that name, so switching datasets
+        // (where ids can repeat) never carries one to another test, and
+        // nothing is deleted by a data change -- only Undo removes it.
+        const declinedReruns = new Map();
+
+        function nameForSelectionKey(key) {
+            return experimentForSelectionKey(String(key).split('::')[0])?.name || '';
+        }
+
+        // A test with entries on the rerun list counts as planned, never also
+        // declined (an older save may hold both; the entries win).
+        function isDeclined(key) {
+            const record = declinedReruns.get(key);
+            return !!record && (!record.name || record.name === nameForSelectionKey(key))
+                && rerunInstanceCount(key) === 0;
+        }
+
         // Rows whose rerun panel is open but not yet added to the list, by
         // selection key. Opening the panel commits nothing: only its Rerun button
         // creates an instance. Session-only; a draft's contents survive closing
         // and reopening the panel, but not a reload.
         const openRerunDrafts = new Set();
+
+        // Rows whose panel is open on an entry already on the list (after its
+        // Rerun was clicked, or when reopening a planned test), by selection key
+        // -> instance id. The panel then edits that entry and shows the "rerun"
+        // decision as made. Session-only, like open drafts.
+        const openEntryPanels = new Map();
 
         // Rows checked for "Rerun as Compound", by selection key. Independent of
         // whether a row's draft panel is open -- checking a row is a separate
@@ -2115,7 +2157,8 @@
                     // Sets do not survive JSON, so tags travel as an array.
                     return { id, key, name, ...record, tags: record.tags ? Array.from(record.tags) : undefined };
                 }),
-                hidden: hiddenReruns
+                hidden: hiddenReruns,
+                declined: Array.from(declinedReruns, ([key, record]) => ({ key, ...record }))
             }));
         }
 
@@ -2134,6 +2177,9 @@
                     hiddenReruns = Array.isArray(saved.hidden)
                         ? saved.hidden.filter(entry => entry && entry.key && entry.id)
                         : [];
+                    (Array.isArray(saved.declined) ? saved.declined : []).forEach(({ key, ...record }) => {
+                        if (key) declinedReruns.set(key, record);
+                    });
                     syncCompoundGroupCounter();
                     return;
                 }
@@ -2236,10 +2282,14 @@
         function rowRerunState(row) {
             const key = row.dataset.selectionKey;
             const instanceId = row.dataset.instanceId || '';
+            const entryId = instanceId ? '' : openEntryPanels.get(key);
             return {
                 instanceId,
                 listedCount: rerunInstanceCount(key),
-                drafting: !instanceId && openRerunDrafts.has(key)
+                drafting: !instanceId && openRerunDrafts.has(key),
+                // The open panel edits this entry (scenario tabs only).
+                openEntryId: entryId && rerunInstances.some(inst => inst.id === entryId) ? entryId : '',
+                declined: !instanceId && isDeclined(key)
             };
         }
 
@@ -2251,7 +2301,7 @@
             // longer paints this row; that's what the "Reruns:" icon strip
             // next to the experiment id is for instead (see
             // renderRerunReferenceStrip).
-            const active = !!state.instanceId || state.drafting;
+            const active = !!state.instanceId || state.drafting || !!state.openEntryId;
             btn.classList.toggle('selected', active);
             const icon = btn.querySelector('.rerun-row-btn-icon');
             const typeEl = btn.querySelector('.rerun-row-btn-type');
@@ -2270,11 +2320,12 @@
             // two start in agreement and the icon stays live as the dropdown
             // is edited, instead of being pinned to the old entry regardless
             // of what the open panel says.
-            const highlighted = !!state.instanceId || state.drafting;
+            const highlighted = !!state.instanceId || state.drafting || !!state.openEntryId;
             const draftKey = draftEntryKey(row.dataset.selectionKey);
-            const entryKey = state.instanceId || draftKey;
+            const entryKey = state.instanceId || state.openEntryId || draftKey;
             const chosenType = highlighted ? RERUN_TYPE_BY_ID.get(rerunTypeFor(entryKey)) : null;
-            const showType = !!chosenType;
+            // A "Don't rerun" decision keeps its own icon, panel open or not.
+            const showType = !!chosenType && !state.declined;
             btn.classList.toggle('showing-type', showType);
             // Hand-drawn SVG, not the typed glyph: a fixed-size tile never fit
             // every label (especially "x+y+z") at a legible size, so each type
@@ -2307,15 +2358,34 @@
             // listed sub-row. Mark it so its button recedes instead of looking
             // like another actionable icon next to the coloured origin ones.
             btn.classList.toggle('context-only', onRerunTab && !state.instanceId);
+            // Decided (set to rerun, or to don't rerun), panel closed: the tile
+            // shows in full blue rather than faint, so the decision reads at a
+            // glance; undecided tests keep the faint tile.
+            btn.classList.toggle('decided', !onRerunTab && !active && (state.listedCount > 0 || state.declined));
 
             icon.style.display = showType ? 'none' : '';
-            icon.src = active ? icon.dataset.selected : icon.dataset.default;
+            // Decided "Don't rerun": the tile shows a diagonal instead of
+            // arrows, black while its panel is open like any open row's button.
+            icon.src = state.declined
+                ? (active ? icon.dataset.declinedSelected : icon.dataset.declined)
+                : active ? icon.dataset.selected : icon.dataset.default;
         }
 
         function applySelectionState(row) {
             const state = rowRerunState(row);
             applyRerunButtonState(row, state);
-            row.classList.toggle('checkbox-selected', !!state.instanceId || state.drafting);
+            row.classList.toggle('checkbox-selected', !!state.instanceId || state.drafting || !!state.openEntryId);
+            // Decided "Don't rerun": muted, and skipped by the highlight jumper.
+            row.classList.toggle('row-declined', state.declined && !state.drafting);
+            // On the Don't Rerun tab, the reason shows under the name.
+            const nameBox = row.querySelector('.experiment-name-container');
+            nameBox?.querySelector('.declined-reason')?.remove();
+            const reason = state.declined && getActiveTabType() === 'declined'
+                ? declinedReruns.get(row.dataset.selectionKey)?.note : '';
+            if (nameBox && reason) {
+                nameBox.insertBefore(el('div', { class: 'declined-reason', textContent: `Reason: ${reason}` }),
+                    nameBox.children[1] || null);
+            }
             // A full re-render (new rows, not just a toggle) needs this applied
             // fresh too -- syncCompoundCheckboxes only touches rows already in
             // the DOM when a checkbox changes, not rows that didn't exist yet.
@@ -2326,7 +2396,6 @@
             row.classList.toggle('row-draftable', !state.instanceId && getActiveTabType() !== 'rerun');
             applyRerunButtonTip(row, state);
             // Entries on the Rerun tab are already where the link would go.
-            applyExperimentNameLink(row, !state.instanceId && state.listedCount > 0);
             renderRerunReferenceStrip(row, state);
         }
 
@@ -2359,19 +2428,38 @@
         // Names read as plain text by default; a row on the rerun list gets a
         // link instead, pointing at the Rerun tab entry rather than out to the
         // platform's report (that stays in the row's overflow menu).
-        function applyExperimentNameLink(row, isListed) {
-            const name = row.querySelector('.experiment-name');
-            if (!name) return;
-            name.classList.toggle('experiment-name-link', !!isListed);
-            if (isListed) {
-                name.setAttribute('role', 'link');
-                name.setAttribute('tabindex', '0');
-                name.dataset.tip = 'View in rerun list';
-            } else {
-                name.removeAttribute('role');
-                name.removeAttribute('tabindex');
-                delete name.dataset.tip;
-            }
+        // A tiny preview on the ID line when the test has screenshots: the
+        // first shot of a test variant (what changed), else the control's, with
+        // "+N" for the rest. Loaded lazily, as rows scroll into view. Clicking
+        // the row opens its panel, where the full side-by-side lives.
+        function renderRowThumb(experiment) {
+            const shots = (experiment.screenshots || []).filter(s => s?.file);
+            if (!shots.length) return '';
+            const shot = shots.find(s => s.arm && s.arm !== 'A') || shots[0];
+            const caption = [shot.armLabel, shot.viewport, shot.pageState].filter(Boolean).join(' · ');
+            const tip = `${shots.length} screenshot${shots.length === 1 ? '' : 's'}${caption ? ` (this one: ${caption})` : ''}. Open the row to compare.`;
+            return `<span class="row-thumb-wrap" data-tip="${escapeAttr(tip)}">`
+                + `<img class="row-thumb" src="${escapeAttr(shot.file)}" alt="" loading="lazy">`
+                + (shots.length > 1 ? `<span class="row-thumb-more">+${shots.length - 1}</span>` : '')
+                + `</span>`;
+        }
+
+        // The experiment's name, linked to it on its platform when there is
+        // a URL (opens in a new tab; same colour as plain names, underlined on
+        // hover), else plain text.
+        function renderExperimentName(experiment) {
+            const name = escapeHtml(experiment.name || 'Untitled');
+            if (!experiment.url) return `<span class="experiment-name">${name}</span>`;
+            return `<a class="experiment-name experiment-name-link" href="${escapeAttr(experiment.url)}" target="_blank" rel="noopener"`
+                + ` data-tip="${escapeAttr(`Open in ${platformNameFor(experiment.url)} ↗`)}">${name}</a>`;
+        }
+
+        // A platform's name from its URL, for "Open in …".
+        function platformNameFor(url) {
+            const host = String(url).toLowerCase();
+            const known = [['posthog', 'PostHog'], ['amplitude', 'Amplitude'], ['growthbook', 'GrowthBook'],
+                ['convert.com', 'Convert'], ['eppo', 'Eppo'], ['absmartly', 'ABsmartly'], ['kameleoon', 'Kameleoon']];
+            return known.find(([key]) => host.includes(key))?.[1] || 'its platform';
         }
 
         // Keeps the rerun button's tooltip/label in step with what a click does.
@@ -2379,12 +2467,22 @@
             const btn = row.querySelector('.rerun-row-btn');
             if (!btn) return;
             let text;
+            // The test type a glyph stands for, e.g. "Same as original".
+            const typeLabel = entryKey => RERUN_TYPE_BY_ID.get(rerunTypeFor(entryKey))?.label || '';
             if (state.instanceId) {
-                text = 'On rerun list';
-            } else if (state.drafting) {
+                // The button shows the entry's type glyph, so the tip names it.
+                text = typeLabel(state.instanceId) || 'On rerun list';
+            } else if (state.drafting || state.openEntryId) {
                 text = 'Close rerun panel';
+            } else if (state.declined) {
+                // Just the decision: the reason lives in the panel's Notes and on
+                // the Don't Rerun tab.
+                text = 'Not rerunning';
             } else if (state.listedCount > 0) {
-                text = `Plan another rerun (${state.listedCount} on list)`;
+                const type = typeLabel(latestRerunInstanceFor(row.dataset.selectionKey)?.id || '');
+                text = state.listedCount > 1
+                    ? `Planned for rerun (${state.listedCount} on list)`
+                    : `Planned for rerun${type ? `: ${type}` : ''}`;
             } else {
                 text = 'Plan a rerun';
             }
@@ -2396,7 +2494,7 @@
             // applyRerunButtonState), so the entry key here is the same one.
             const originEl = row.querySelector('.rerun-row-origin');
             if (originEl && originEl.style.display !== 'none') {
-                const entryKey = state.instanceId || draftEntryKey(row.dataset.selectionKey);
+                const entryKey = state.instanceId || state.openEntryId || draftEntryKey(row.dataset.selectionKey);
                 const label = TAB_SHORT_LABEL[detailFor(entryKey).origin] || '';
                 if (label) originEl.dataset.tip = `From: ${label}`;
                 originEl.alt = label;
@@ -2525,7 +2623,7 @@
 
         function renderRerunButton() {
             return `<button type="button" class="rerun-row-btn" data-tip="Add to rerun list" aria-label="Add to rerun list">
-                <img src="images/iconRerun.svg" data-default="images/iconRerun.svg" data-selected="images/iconRerun_Sel.svg" alt="" class="rerun-row-btn-icon">
+                <img src="images/iconRerun.svg" data-default="images/iconRerun.svg" data-selected="images/iconRerun_Sel.svg" data-declined="images/iconRerunDeclined.svg" data-declined-selected="images/iconRerunDeclined_Sel.svg" alt="" class="rerun-row-btn-icon">
                 <span class="rerun-row-btn-type" aria-hidden="true"></span>
             </button>`;
         }
@@ -2602,8 +2700,7 @@
             if (instanceId) row.dataset.instanceId = instanceId;
 
             // The report URL lives on the row so the overflow menu's "View Report"
-            // item can find it; the name itself is plain text unless the row is
-            // tagged for rerun (see applyExperimentNameLink).
+            // item can find it; the name links there too (renderExperimentName).
             if (experiment.url) row.dataset.reportUrl = experiment.url;
 
             row.innerHTML = `
@@ -2611,11 +2708,12 @@
                 <td class="col-name">
                     <div class="experiment-name-container">
                         <div class="experiment-name-row">
-                            <span class="experiment-name">${experiment.name || 'Untitled'}</span>
+                            ${renderExperimentName(experiment)}
                         </div>
                         ${renderChangeText(experiment)}
-                        ${experiment.id ? `<div class="experiment-meta">
-                            <span class="experiment-id">${experiment.id}</span>
+                        ${experiment.id || experiment.screenshots?.length ? `<div class="experiment-meta">
+                            ${experiment.id ? `<span class="experiment-id">${escapeHtml(experiment.id)}</span>` : ''}
+                            ${renderRowThumb(experiment)}
                         </div>` : ''}
                         <div class="rerun-reference-strip"></div>
                     </div>
@@ -2685,6 +2783,9 @@
 
             view.rows.forEach(viewRow => {
                 if (term && !viewRow.searchText.includes(term)) return;
+                // The Don't Rerun tab lists declined tests only (a declined
+                // comparison brings its parent along as context).
+                if (tabType === 'declined' && !isDeclined(viewRow.selectionKey)) return;
                 keep.add(viewRow);
                 if (viewRow.kind === 'sub') keep.add(viewRow.parent);
             });
@@ -4552,6 +4653,7 @@
         function afterRerunStateChange() {
             saveRerunSelection();
             updateRerunTabCount();
+            updateDeclinedTab();
             if (getActiveTabType() === 'rerun') {
                 renderView('rerun');
                 updateTitle('rerun');
@@ -4565,7 +4667,9 @@
         // open one). Opening commits nothing: the panel's Rerun button is what
         // puts an entry on the list, and a row can be added any number of times.
         // On the Rerun tab an entry's button just takes you to its notes.
-        function toggleRerunDraft(row) {
+        // `newDraft`: open a fresh draft even when the test is already planned
+        // ("+ Add another"), instead of opening its latest entry.
+        function toggleRerunDraft(row, { newDraft = false } = {}) {
             if (!row) return;
             closeRowActionMenu();
             if (row.dataset.instanceId) {
@@ -4586,9 +4690,30 @@
                 return;
             }
 
+            if (openEntryPanels.has(key)) {
+                openEntryPanels.delete(key);
+                afterRerunStateChange();
+                return;
+            }
+
+            // Already planned for rerun: open its latest entry, decision shown
+            // as made, rather than a blank second draft (that's "+ Add another").
+            const latest = getActiveTabType() !== 'rerun' && !openRerunDrafts.has(key)
+                ? latestRerunInstanceFor(key) : null;
+            if (latest && !newDraft) {
+                openEntryPanels.set(key, latest.id);
+                afterRerunStateChange();
+                focusNotesFieldFor(tableBody.querySelector(
+                    `tr[data-selection-key="${CSS.escape(key)}"]:not([data-instance-id])`));
+                return;
+            }
+
             openRerunDrafts.add(key);
-            // Remember which scenario tab this came from (not 'rerun' itself).
-            const activeTab = getActiveTabType();
+            // Remember which scenario tab this came from (not 'rerun' itself;
+            // on the Don't Rerun tab, the scenario it was declined from).
+            const activeTab = getActiveTabType() === 'declined'
+                ? (declinedReruns.get(key)?.origin || 'rerun')
+                : getActiveTabType();
             const draftKey = draftEntryKey(key);
             if (activeTab !== 'rerun') {
                 const patch = { origin: activeTab };
@@ -4619,9 +4744,76 @@
         // The draft panel's Rerun button: the draft becomes a new entry on the
         // list, carrying its notes, tags and type, and the panel closes so the
         // row is ready to be drafted again.
+        // "Don't rerun": records the decision (the panel's notes as its reason).
+        // The panel stays open with the choice shown as made, like Rerun. The test stays highlighted where it matches --
+        // it still fits the rule -- but muted, skipped by the highlight
+        // jumper, and counted in the subtitle as decided.
+        function declineRerunFromDraft(key) {
+            if (!key || !openRerunDrafts.has(key)) return;
+            // Already planned for rerun: the two decisions exclude each other.
+            if (rerunInstanceCount(key) > 0) return;
+            commitOpenNotesField();
+            const draftKey = draftEntryKey(key);
+            const record = detailFor(draftKey);
+            declinedReruns.set(key, {
+                name: nameForSelectionKey(key),
+                note: String(record.notes || '').trim(),
+                origin: record.origin || getActiveTabType(),
+                at: new Date().toISOString()
+            });
+            afterDeclineChange();
+        }
+
+        // From "✓ Rerun" straight to "Don't rerun": the entry comes off the
+        // list (its type and notes back in the panel), then the test is declined.
+        function switchRerunToDecline(key, id) {
+            if (!key || !id || rerunInstanceCount(key) !== 1) return;
+            undoRerunFromPanel(key, id);
+            declineRerunFromDraft(key);
+        }
+
+        // Undo (clicking the selected "✓ Don't rerun" again): back to undecided.
+        // The panel stays open, its buttons flipped back in place, so the click
+        // reads as toggling the choice rather than closing something.
+        function undoDeclinedRerun(key) {
+            if (!key) return;
+            commitOpenNotesField();
+            declinedReruns.delete(key);
+            // Opened from a closed declined row, the panel was not a draft yet.
+            openRerunDrafts.add(key);
+            afterDeclineChange();
+        }
+
+        // Declined tests among the loaded data.
+        function declinedCount() {
+            return view.rows.filter(row => isDeclined(row.selectionKey)).length;
+        }
+
+        // The Don't Rerun tab shows only while there is something on it. If it
+        // empties while open, the view moves to the first scenario tab.
+        function updateDeclinedTab() {
+            const tab = document.querySelector('.tab[data-tab="declined"]');
+            if (!tab) return;
+            const n = declinedCount();
+            tab.style.display = n ? '' : 'none';
+            document.getElementById('declinedTabCount').textContent = n;
+            if (!n && tab.classList.contains('active')) {
+                document.querySelector('.tab[data-tab="almost-significant"]')?.click();
+            }
+        }
+
+        function afterDeclineChange() {
+            afterRerunStateChange();
+            const tab = getActiveTabType();
+            if (tab && tab !== 'rerun') updateTitle(tab);
+            updateHighlightNav();
+        }
+
         function addRerunFromDraft(key) {
             if (!key || !openRerunDrafts.has(key)) return;
             commitOpenNotesField();
+            // Rerunning after all replaces a "Don't rerun" decision.
+            declinedReruns.delete(key);
             const draftKey = draftEntryKey(key);
             const id = newRerunInstanceId();
             rerunInstances.push({ id, key });
@@ -4629,8 +4821,37 @@
             if (Object.keys(record).length) rerunDetails.set(id, record);
             rerunDetails.delete(draftKey);
             openRerunDrafts.delete(key);
+            // The panel stays open, now on the new entry, with the decision
+            // shown as made ("✓ Rerun"); type and notes keep editing it.
+            if (getActiveTabType() !== 'rerun') openEntryPanels.set(key, id);
             afterRerunStateChange();
             flashRerunTab();
+        }
+
+        // Clicking the selected "✓ Rerun" again: the entry comes off the list
+        // and the panel goes back to an undecided draft holding its type and
+        // notes, so nothing typed is lost.
+        function undoRerunFromPanel(key, id) {
+            if (!key || !id) return;
+            commitOpenNotesField();
+            const { compoundGroup, ...record } = detailFor(id);
+            dropRerunInstance(id);
+            openEntryPanels.delete(key);
+            rerunDetails.set(draftEntryKey(key), record);
+            openRerunDrafts.add(key);
+            afterRerunStateChange();
+        }
+
+        // "+ Add another": a fresh draft for a second rerun idea on the same
+        // test (blank notes; its type starts as the existing entry's, as any
+        // draft for a planned test does).
+        function addAnotherRerunDraft(key) {
+            if (!key) return;
+            commitOpenNotesField();
+            openEntryPanels.delete(key);
+            rerunDetails.delete(draftEntryKey(key));
+            const row = tableBody.querySelector(`tr[data-selection-key="${CSS.escape(key)}"]:not([data-instance-id])`);
+            toggleRerunDraft(row, { newDraft: true });
         }
 
         // "Rerun as Compound": every currently checked row's draft is added to
@@ -4655,6 +4876,7 @@
                 rerunInstances.push({ id, key });
                 const record = detailFor(draftKey);
                 updateDetail(id, { ...record, compoundGroup: groupId });
+                declinedReruns.delete(key);
                 rerunDetails.delete(draftKey);
                 openRerunDrafts.delete(key);
                 compoundSelectedKeys.delete(draftKey);
@@ -4683,6 +4905,13 @@
         function removeRerunInstance(id) {
             if (!id) return;
             if (!confirm('Remove this entry from your rerun list?')) return;
+            dropRerunInstance(id);
+            afterRerunStateChange();
+        }
+
+        // Takes one entry off the list (and out of a compound group that would
+        // be left with one member). Callers refresh afterwards.
+        function dropRerunInstance(id) {
             const groupId = detailFor(id).compoundGroup;
             rerunInstances = rerunInstances.filter(inst => inst.id !== id);
             rerunDetails.delete(id);
@@ -4696,7 +4925,6 @@
                     stillGrouped.forEach(inst => updateDetail(inst.id, { compoundGroup: undefined }));
                 }
             }
-            afterRerunStateChange();
         }
 
         // A new entry for the same experiment, starting as a copy of this one's
@@ -4753,7 +4981,10 @@
                 format: RERUN_FILE_FORMAT,
                 version: 1,
                 exportedAt: new Date().toISOString(),
-                reruns
+                reruns,
+                // "Don't rerun" decisions, with their reasons.
+                declined: Array.from(declinedReruns, ([experimentKey, { name, ...record }]) =>
+                    ({ experimentKey, experimentName: name, ...record }))
             };
             const blob = new Blob([JSON.stringify(payload, null, 2) + '\n'], { type: 'application/json' });
             const link = document.createElement('a');
@@ -4806,15 +5037,25 @@
                 importedIds.push(instanceId);
             });
 
+            // "Don't rerun" decisions from the file. One already saved for the
+            // same test is kept; nothing here overwrites a decision.
+            let declinedAdded = 0;
+            (Array.isArray(payload.declined) ? payload.declined : []).forEach(({ experimentKey, experimentName, ...record }) => {
+                if (!experimentKey || declinedReruns.has(experimentKey)) return;
+                declinedReruns.set(experimentKey, { name: experimentName || '', ...record });
+                declinedAdded++;
+            });
+
             // Sorts the new entries into shown (their test is loaded) and hidden.
             syncRerunEntriesToDataset();
             const shown = importedIds.filter(id => rerunInstances.some(inst => inst.id === id)).length;
             const kept = importedIds.length - shown;
-            if (importedIds.length) {
-                afterRerunStateChange();
+            if (importedIds.length || declinedAdded) {
+                afterDeclineChange();
                 if (shown) flashRerunTab();
             }
             const lines = [`Added ${shown} rerun${shown === 1 ? '' : 's'}.`];
+            if (declinedAdded) lines.push(`Added ${declinedAdded} "Don't rerun" decision${declinedAdded === 1 ? '' : 's'}.`);
             if (kept) lines.push(`Kept ${kept} for experiments not loaded now; they show when that data is loaded.`);
             const skipped = [];
             if (duplicate) skipped.push(`${duplicate} already saved`);
@@ -5057,6 +5298,52 @@
         function buildRerunPanelAction(row, state) {
             if (state.instanceId) return buildGroupAsCompoundAction(state.instanceId);
             const key = row.dataset.selectionKey;
+            // Open on an entry already on the list: the "rerun" decision is
+            // made, so Rerun shows selected (clicking it again takes the entry
+            // off the list, keeping its type and notes in the panel), Don't
+            // rerun is blocked, and "+ Add another" plans a second idea.
+            if (state.openEntryId) {
+                return el('div', { class: 'rerun-panel-actions' }, [
+                    el('button', {
+                        type: 'button',
+                        class: 'rerun-panel-btn rerun-panel-btn-add is-selected',
+                        textContent: '✓ Rerun',
+                        'aria-pressed': 'true',
+                        dataset: {
+                            action: 'undo-rerun',
+                            selectionKey: key,
+                            instanceId: state.openEntryId,
+                            tip: 'On the rerun list. Click to take it off again.'
+                        }
+                    }),
+                    el('button', {
+                        type: 'button',
+                        class: 'rerun-panel-btn rerun-panel-btn-decline',
+                        textContent: 'Don’t rerun',
+                        // Switching takes this entry off the list; with several
+                        // planned, that would silently drop the others.
+                        'aria-disabled': state.listedCount > 1 ? 'true' : null,
+                        dataset: state.listedCount > 1
+                            ? { selectionKey: key, tip: `${state.listedCount} reruns planned. Remove the others on the Rerun tab first.` }
+                            : { action: 'switch-to-decline', selectionKey: key, instanceId: state.openEntryId,
+                                tip: 'Switch to don’t rerun. This takes it off the rerun list.' }
+                    }),
+                    el('button', {
+                        type: 'button',
+                        class: 'rerun-panel-btn rerun-panel-btn-link',
+                        textContent: state.listedCount > 1 ? `+ Add another (${state.listedCount} planned)` : '+ Add another',
+                        dataset: { action: 'add-another', selectionKey: key, tip: 'Plan another rerun idea for this test' }
+                    }),
+                    // Deletes the entry outright (confirmed, as on the Rerun tab),
+                    // unlike un-selecting ✓ Rerun, which keeps its type and notes.
+                    el('button', {
+                        type: 'button',
+                        class: 'rerun-panel-btn rerun-panel-btn-link rerun-panel-btn-remove',
+                        textContent: 'Remove',
+                        dataset: { action: 'remove-rerun', instanceId: state.openEntryId, tip: 'Delete this entry from the rerun list' }
+                    })
+                ]);
+            }
             // This experiment already has at least one entry on the list --
             // the row's own icon/highlight already show that one's saved
             // state, so the button says so too, rather than reading like a
@@ -5073,9 +5360,47 @@
                         : 'Add to the rerun list'
                 }
             });
+            // The other decision: not worth a rerun. Once decided, the same
+            // button shows as selected ("✓ Don't rerun", filled) so the choice
+            // reads at a glance; clicking it again undoes it. Rerun still
+            // works and replaces the decision.
+            let declineEl;
+            if (state.declined) {
+                declineEl = [
+                    el('button', {
+                        type: 'button',
+                        class: 'rerun-panel-btn rerun-panel-btn-decline is-selected',
+                        textContent: '✓ Don’t rerun',
+                        'aria-pressed': 'true',
+                        dataset: { action: 'undo-decline', selectionKey: key, tip: 'Decided not to rerun. Click to undo.' }
+                    })
+                ];
+            } else {
+                // The two decisions exclude each other: a test with entries on
+                // the rerun list is already decided "rerun", so it can't also be
+                // declined (going back and forth would pile up entries).
+                const planned = state.listedCount > 0;
+                declineEl = [el('button', {
+                    type: 'button',
+                    class: 'rerun-panel-btn rerun-panel-btn-decline',
+                    textContent: 'Don’t rerun',
+                    // Not the disabled attribute: browsers show no hover tip on a
+                    // disabled button, and the tip is the explanation.
+                    'aria-disabled': planned ? 'true' : null,
+                    dataset: {
+                        action: 'decline-rerun',
+                        selectionKey: key,
+                        tip: planned
+                            ? 'Already planned for rerun. Remove its entries on the Rerun tab first.'
+                            : 'Decide not to rerun this test. The notes above are kept as the reason.'
+                    }
+                })];
+            }
             // Only once this row is one of two or more checked -- a single
             // checked row has nothing to compound with.
-            if (compoundSelectedKeys.size < 2 || !compoundSelectedKeys.has(draftEntryKey(key))) return rerunBtn;
+            if (compoundSelectedKeys.size < 2 || !compoundSelectedKeys.has(draftEntryKey(key))) {
+                return el('div', { class: 'rerun-panel-actions' }, [rerunBtn, ...declineEl]);
+            }
             const compoundBtn = el('button', {
                 type: 'button',
                 class: 'rerun-panel-btn rerun-panel-btn-compound',
@@ -5086,7 +5411,7 @@
                     tip: `Add all ${compoundSelectedKeys.size} checked experiments to the rerun list together`
                 }
             });
-            return el('div', { class: 'rerun-panel-actions' }, [rerunBtn, compoundBtn]);
+            return el('div', { class: 'rerun-panel-actions' }, [rerunBtn, compoundBtn, ...declineEl]);
         }
 
         // Entry keys whose reference section (original change + screenshots)
@@ -5139,18 +5464,28 @@
                     const state = rowRerunState(row);
                     // Rows merely on the list stay collapsed; so do context rows
                     // (a parent shown only because a comparison of its is listed).
-                    if (!state.instanceId && !state.drafting) return;
-                    const entryKey = state.instanceId || draftEntryKey(row.dataset.selectionKey);
+                    if (!state.instanceId && !state.drafting && !state.openEntryId) return;
+                    const entryKey = state.instanceId || state.openEntryId || draftEntryKey(row.dataset.selectionKey);
 
                     const isSubRow = row.classList.contains('sub-row');
+                    // One Notes field for either decision: what to change for a
+                    // rerun, or why not to rerun. A declined test shows its
+                    // reason here, and editing it updates the reason.
+                    const fieldId = 'rerun-notes-' + entryKey.replace(/[^a-z0-9]/gi, '-');
+                    const declinedNote = state.declined ? declinedReruns.get(row.dataset.selectionKey)?.note : '';
                     const field = el('textarea', {
                         class: 'rerun-note-field',
+                        id: fieldId,
                         rows: 2,
-                        placeholder: 'What would you change?',
+                        placeholder: 'What to change, or why not to rerun…',
                         // .value, not innerHTML: notes are free text typed by the user.
-                        value: detailFor(entryKey).notes || '',
+                        value: detailFor(entryKey).notes || declinedNote || '',
                         dataset: { entryKey }
                     });
+                    const notes = el('div', { class: 'rerun-notes-group' }, [
+                        el('label', { class: 'rerun-type-label', htmlFor: fieldId, textContent: 'Notes' }),
+                        field
+                    ]);
 
                     const item = itemForSelectionKey(row.dataset.selectionKey);
                     // The full change text: the row itself clamps it to two lines.
@@ -5171,7 +5506,7 @@
                         el('td', { colSpan: colspan },
                             el('div', { class: 'rerun-note-layout' }, [
                                 buildRerunTypePicker(entryKey),
-                                field,
+                                notes,
                                 buildRerunPanelAction(row, state),
                                 hasReference ? el('hr', { class: 'rerun-panel-divider' }) : null,
                                 hasReference ? buildReferenceToggle(entryKey, referenceOpen, change, shotCount) : null,
@@ -5193,25 +5528,6 @@
                     autoGrowNotesField(field);
                 });
         }
-
-        // A tagged name links to the row's place in the Rerun list. Names on
-        // untagged rows are inert text, so the guard is the link class.
-        tableBody.addEventListener('click', function(e) {
-            const name = e.target.closest('.experiment-name-link');
-            if (!name) return;
-            const row = name.closest('tr');
-            if (row) showRowOnRerunTab(row);
-        });
-
-        // Keyboard equivalent, since the tagged name is a span acting as a link.
-        tableBody.addEventListener('keydown', function(e) {
-            if (e.key !== 'Enter' && e.key !== ' ') return;
-            const name = e.target.closest('.experiment-name-link');
-            if (!name) return;
-            e.preventDefault();
-            const row = name.closest('tr');
-            if (row) showRowOnRerunTab(row);
-        });
 
         // Each "Reruns:" tile jumps straight to its own entry on the Rerun
         // tab, not just the first one for the experiment, and pre-checks it
@@ -5254,6 +5570,11 @@
             if (!btn) return;
             e.stopPropagation();
             if (btn.dataset.action === 'add-rerun') addRerunFromDraft(btn.dataset.selectionKey);
+            if (btn.dataset.action === 'decline-rerun') declineRerunFromDraft(btn.dataset.selectionKey);
+            if (btn.dataset.action === 'undo-decline') undoDeclinedRerun(btn.dataset.selectionKey);
+            if (btn.dataset.action === 'undo-rerun') undoRerunFromPanel(btn.dataset.selectionKey, btn.dataset.instanceId);
+            if (btn.dataset.action === 'switch-to-decline') switchRerunToDecline(btn.dataset.selectionKey, btn.dataset.instanceId);
+            if (btn.dataset.action === 'add-another') addAnotherRerunDraft(btn.dataset.selectionKey);
             if (btn.dataset.action === 'add-rerun-compound') addCompoundRerunFromChecked();
             if (btn.dataset.action === 'group-as-compound') groupAsCompound();
             if (btn.dataset.action === 'remove-rerun') removeRerunInstance(btn.dataset.instanceId);
@@ -5271,9 +5592,13 @@
 
             select.classList.toggle('is-set', select.value !== DEFAULT_RERUN_TYPE);
 
-            // The row's own icon carries the chosen type's glyph now.
+            // The row's own icon carries the chosen type's glyph now, and its
+            // tooltip names the type.
             const row = rowForEntryKey(select.dataset.entryKey);
-            if (row) applyRerunButtonState(row, rowRerunState(row));
+            if (row) {
+                applyRerunButtonState(row, rowRerunState(row));
+                applyRerunButtonTip(row, rowRerunState(row));
+            }
 
             const picker = select.closest('.rerun-type-picker');
             if (!picker) return;
@@ -5293,6 +5618,14 @@
             if (!field) return;
             const entryKey = field.dataset.entryKey;
             if (rerunEntryExists(entryKey)) saveRerunNotes(entryKey, field.value);
+            // A declined test's notes are its reason: keep the decision in step.
+            const key = entryKey.startsWith('draft:') ? entryKey.slice('draft:'.length) : null;
+            if (key && isDeclined(key)) {
+                declinedReruns.get(key).note = field.value.trim();
+                saveRerunSelection();
+                const row = rowForEntryKey(entryKey);
+                if (row) applySelectionState(row);
+            }
         });
 
         // Typing in a note field must not bubble up to the row-click handler and
@@ -5498,6 +5831,13 @@
 
             if (!config) return;
             scenarioTitle.textContent = config.title;
+            if (tabType === 'declined') {
+                const n = declinedCount();
+                subtitle.textContent = n
+                    ? `${n} test${n === 1 ? '' : 's'} decided not to rerun, with the reasons noted.`
+                    : config.subtitle;
+                return;
+            }
             if (tabType === 'rerun') {
                 const entryCount = rerunInstances.length;
                 subtitle.textContent = entryCount > 0
@@ -5505,9 +5845,11 @@
                     : config.subtitle;
                 return;
             }
-            subtitle.textContent = totalCount > 0 && config.countSubtitle
+            const declined = view.rows.filter(row => rowMatchesTab(row, tabType) && isDeclined(row.selectionKey)).length;
+            subtitle.textContent = (totalCount > 0 && config.countSubtitle
                 ? config.countSubtitle(matchCount, totalCount)
-                : config.subtitle;
+                : config.subtitle)
+                + (declined ? ` · ${declined} decided not to rerun` : '');
         }
 
         // Sort highlighted rows to the top using tab's default column (metric) and direction
@@ -5555,7 +5897,9 @@
         function getHighlightedRows() {
             // Include highlighted sub-rows (comparison variations) so navigation
             // reaches them too; DOM order gives natural top-to-bottom traversal.
-            return Array.from(document.querySelectorAll('#tableBody tr.highlighted-row'));
+            // Tests decided "Don't rerun" are skipped: stepping through visits
+            // only the undecided ones.
+            return Array.from(document.querySelectorAll('#tableBody tr.highlighted-row:not(.row-declined)'));
         }
 
         function getVisibleTableRows() {

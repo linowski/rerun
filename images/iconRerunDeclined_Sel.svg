@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- "Don't rerun", selected (its panel open): the black tile, like
+       iconRerun_Sel.svg, with the padded diagonal. Drawn in-house. -->
+  <rect width="64" height="64" rx="14" fill="#1a1a1a"/>
+  <line x1="20" y1="20" x2="44" y2="44" stroke="#ffffff" stroke-width="5" stroke-linecap="round"/>
+</svg>
