@@ -185,13 +185,6 @@ function recalculatePValue(totalSampleSize, metricType, observedEffect, baseline
  * guarantee holds whatever the value -- a badly chosen constant costs
  * power, not validity.
  *
- * Checked against a real mSPRT platform: on 34 treatment arms from one
- * Amplitude account (sequentialTestMSPRT), the best-fitting constant was
- * r ~ 6.5, practically the same threshold; with r = 7.84 our p-values match
- * Amplitude's significant / not-significant call on 32 of 34 arms (the
- * earlier r = 1 needed z ~ 3.66 and matched 28). The value comes from the
- * power rule, not from that fit, so it was not tuned on anyone's results.
- *
  * Two simplifications, both conservative or neutral: a constant r ties the
  * mixture to the sample size, and the p-value is judged on the final
  * numbers only, so this works as a fair penalty for peeking rather than a
@@ -234,13 +227,14 @@ function mSprtPValue(z, r = SEQUENTIAL_MSPRT_R) {
  * p-value and an estimated one: the signed z is backed out of the two-sided
  * p (z = sign(effect) * Φ⁻¹(1 - p/2)), which also gives the standard error
  * (SE = |effect| / |z|) needed to move by the margin. With `sequential`, the
- * shifted z gets the always-valid mSPRT p-value instead -- one-sided, so it is
- * 1 whenever the evidence points the wrong way.
+ * shifted z gets that lens's p-value instead (always-valid mSPRT, or the group
+ * sequential repeated p, halved for one side) -- one-sided, so it is 1
+ * whenever the evidence points the wrong way.
  * @param {number} twoSidedP - Fixed-horizon two-sided p-value
  * @param {number} effect - Observed relative effect, % (e.g. -1.5)
  * @param {string} hypothesis - 'two-sided' | 'superiority' | 'non-inferiority'
  * @param {number} margin - Non-inferiority margin, relative % (positive, e.g. 2 for -2%)
- * @param {boolean} sequential - Return the always-valid version
+ * @param {boolean|string} sequential - false, 'msprt' (or true) or 'group'
  * @returns {number|null} The p-value, or null when it can't be derived
  *   (non-inferiority with a 0% effect has no recoverable standard error)
  */
@@ -250,37 +244,96 @@ function hypothesisPValue(twoSidedP, effect, hypothesis, margin, sequential = fa
     if (twoSided && !sequential) return twoSidedP;
     const p = Math.min(Math.max(twoSidedP, 1e-12), 1);
     const z = p >= 1 ? 0 : Math.sign(effect) * getZScore(1 - p / 2);
-    // Two-sided always-valid: the mSPRT is symmetric, so |z| either way.
-    if (twoSided) return mSprtPValue(Math.abs(z));
+    // Two-sided sequential: both lenses are symmetric, so |z| either way.
+    if (twoSided) return sequentialPFromZ(Math.abs(z), sequential);
     let shifted = z;
     if (hypothesis === 'non-inferiority') {
         if (!effect || !z || !(margin > 0)) return null;
         const se = Math.abs(effect) / Math.abs(z);
         shifted = (effect + margin) / se;
     }
-    if (sequential) return shifted > 0 ? mSprtPValue(shifted) : 1;
+    if (sequential) {
+        if (!(shifted > 0)) return 1;
+        // A one-sided group design at alpha is the two-sided one at 2 * alpha.
+        return sequential === 'group' ? groupSequentialPValue(shifted) / 2 : mSprtPValue(shifted);
+    }
     return Math.max(0, Math.min(1, 1 - normalCDF(shifted)));
 }
 
-function recalculateSequentialPValue(totalSampleSize, metricType, observedEffect, baselineRate = 5, cv = null) {
+function recalculateSequentialPValue(totalSampleSize, metricType, observedEffect, baselineRate = 5, cv = null, sequential = 'msprt') {
     if (observedEffect === null || observedEffect === undefined) return null;
     if (!hasSpread(metricType, cv, baselineRate)) return null;
     const z = observedZStatistic(totalSampleSize, metricType, observedEffect, baselineRate, cv);
     if (z === null) return totalSampleSize > 0 ? 1 : null;
-    return mSprtPValue(z);
+    return sequentialPFromZ(z, sequential);
 }
 
 /**
- * Power under sequential (mSPRT) testing has no clean closed form the way
- * fixed-horizon power does -- Johari et al. show the mSPRT needs roughly
- * 1.2x-1.4x the fixed-horizon sample size for the same power, since it
- * spends some of its error budget on being valid at every intermediate
- * look, not just the final one. Rather than inventing a bespoke formula,
- * this applies that documented inflation factor to the existing
- * fixed-horizon calculation: it's an approximation, not an exact result,
- * and is labeled as such everywhere it's shown.
+ * Group sequential p-value: the repeated p-value at the last look (Jennison &
+ * Turnbull, "Interim analyses: the repeated confidence interval approach",
+ * JRSS B 1989) -- the smallest two-sided alpha whose 5-look design (see
+ * sequential-design.js) would reject at the final look with this z. Like the
+ * mSPRT version, it judges the final numbers only, read as the last look.
+ * The final boundary is tabulated once over log-spaced alphas (monotone in
+ * alpha) and inverted by interpolation.
+ * @param {number} z - The observed z-statistic (sign ignored: two-sided)
+ * @returns {number|null} Two-sided p-value (0 to 1)
  */
-const SEQUENTIAL_SAMPLE_SIZE_INFLATION = 1.3;
+const GROUP_P_ALPHA_MIN = 1e-6;
+let groupFinalBoundaries = null;
+
+function groupSequentialPValue(z) {
+    if (z === null || !Number.isFinite(z)) return null;
+    if (!groupFinalBoundaries) {
+        const count = 81;
+        groupFinalBoundaries = [];
+        for (let i = 0; i < count; i++) {
+            const logAlpha = Math.log(GROUP_P_ALPHA_MIN) * (1 - i / (count - 1));
+            groupFinalBoundaries.push({ logAlpha, bound: SequentialDesign.bounds(Math.exp(logAlpha)).efficacy[SequentialDesign.LOOKS - 1] });
+        }
+    }
+    const table = groupFinalBoundaries, absZ = Math.abs(z);
+    if (absZ >= table[0].bound) return Math.min(GROUP_P_ALPHA_MIN, 2 * (1 - normalCDF(absZ)));
+    if (absZ <= table[table.length - 1].bound) return 1;
+    let i = 0;
+    while (table[i + 1].bound > absZ) i++;
+    const f = (table[i].bound - absZ) / (table[i].bound - table[i + 1].bound);
+    return Math.min(1, Math.exp(table[i].logAlpha + f * (table[i + 1].logAlpha - table[i].logAlpha)));
+}
+
+// The sequential lens a p-value or power is read under: 'msprt' (true is
+// read as 'msprt'), 'group', or none.
+function sequentialPFromZ(z, sequential) {
+    return sequential === 'group' ? groupSequentialPValue(z) : mSprtPValue(z);
+}
+
+/**
+ * Power of a sequential test whose maximum sample is this sample size, at
+ * the same MDE and alpha 0.05 as recalculatePower: the fixed-horizon power
+ * gives the expected z at the end (theta = z(1 - 0.05/2) + z(power)), and the
+ * sequential design's power at that theta is calculated exactly (as in the
+ * changeandmeasure power planner).
+ *   - 'msprt': always-valid test checked `peeks` times, evenly spaced (one a
+ *     day over the test's run); it costs about 1.6-1.8x the fixed-horizon
+ *     sample for the same power.
+ *   - 'group': 5 evenly spaced looks (about 1.1x).
+ * @param {string} sequential - 'msprt' | 'group'
+ * @param {number} peeks - mSPRT only: how many times the test was checked
+ * @returns {number|null} Power as a rounded percentage
+ */
+const SEQUENTIAL_POWER_ALPHA = 0.05;
+const SEQUENTIAL_DEFAULT_PEEKS = 30;   // mSPRT checks when the run length is unknown
+
+function recalculateSequentialPower(totalSampleSize, metricType, relativeMDE = 2, baselineRate = 5, cv = null,
+        sequential = 'msprt', peeks = SEQUENTIAL_DEFAULT_PEEKS) {
+    const fixed = fixedPowerFraction(totalSampleSize, metricType, relativeMDE, baselineRate, cv);
+    if (fixed === null) return null;
+    const theta = getZScore(1 - SEQUENTIAL_POWER_ALPHA / 2) + getZScore(Math.min(0.9999, Math.max(0.0001, fixed)));
+    const power = sequential === 'group'
+        ? SequentialDesign.powerAt(SequentialDesign.get(SEQUENTIAL_POWER_ALPHA), theta)
+        : AlwaysValidDesign.powerAt(AlwaysValidDesign.get(SEQUENTIAL_POWER_ALPHA, Math.max(1, peeks || SEQUENTIAL_DEFAULT_PEEKS)), theta);
+    return Math.round(Math.max(0, Math.min(1, power)) * 100);
+}
 
 /**
  * Standard normal probability density function
@@ -334,7 +387,8 @@ function typeS(power, alpha = 0.05) {
     return normalCDF(-lambda - zCrit) / denom;
 }
 
-function recalculatePower(totalSampleSize, metricType, relativeMDE = 2, baselineRate = 5, cv = null) {
+// Fixed-horizon power as a decimal (0-1), unrounded; null when it can't be calculated.
+function fixedPowerFraction(totalSampleSize, metricType, relativeMDE = 2, baselineRate = 5, cv = null) {
     if (!totalSampleSize || totalSampleSize <= 0) return null;
     if (!hasSpread(metricType, cv, baselineRate)) return null;
 
@@ -343,13 +397,15 @@ function recalculatePower(totalSampleSize, metricType, relativeMDE = 2, baseline
     if (metricType === 'binary') {
         const p1 = baselineRate / 100;
         const p2 = p1 * (1 + relativeMDE / 100);
-        const power = calculateBinaryPower(perArm, p1, p2);
-        return Math.round(power * 100);
-    } else {
-        // Continuous: the relative MDE in standard deviations (Cohen's d),
-        // using the metric's own coefficient of variation.
-        const effectSize = (relativeMDE / 100) / cv;
-        const power = calculateContinuousPower(perArm, effectSize);
-        return Math.round(power * 100);
+        return calculateBinaryPower(perArm, p1, p2);
     }
+    // Continuous: the relative MDE in standard deviations (Cohen's d),
+    // using the metric's own coefficient of variation.
+    const effectSize = (relativeMDE / 100) / cv;
+    return calculateContinuousPower(perArm, effectSize);
+}
+
+function recalculatePower(totalSampleSize, metricType, relativeMDE = 2, baselineRate = 5, cv = null) {
+    const power = fixedPowerFraction(totalSampleSize, metricType, relativeMDE, baselineRate, cv);
+    return power === null ? null : Math.round(power * 100);
 }

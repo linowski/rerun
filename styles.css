@@ -400,7 +400,8 @@ h1 {
     gap: 4px;
 }
 
-.tab[data-tab="rerun"] .tab-label {
+.tab[data-tab="rerun"] .tab-label,
+.tab[data-tab="rerun-export"] .tab-label {
     text-transform: uppercase;
     color: var(--accent);
 }
@@ -409,7 +410,9 @@ h1 {
    black marks "this is selected" or "about to be", blue is only the quiet
    default. */
 .tab[data-tab="rerun"].active .tab-label,
-.tab[data-tab="rerun"]:not(.active):hover .tab-label {
+.tab[data-tab="rerun"]:not(.active):hover .tab-label,
+.tab[data-tab="rerun-export"].active .tab-label,
+.tab[data-tab="rerun-export"]:not(.active):hover .tab-label {
     color: var(--text-strong);
 }
 
@@ -1165,19 +1168,6 @@ th.col-power {
     display: flex;
     gap: 3px;
     align-items: flex-start;
-}
-
-/* Sequential (mSPRT) mode: no fixed sample size, so "power at this N"
-   isn't a meaningful number -- the decision signal lives on the P-val
-   badge instead (see pvalueCell). Muted placeholder rather than an empty
-   cell, so the column's absence reads as intentional. */
-/* Sequential mode's power is an approximation: a small, dimmed "≈" ahead of
-   the number, the same treatment as the "<" in a "< 0.001" p-value. */
-.power-approx {
-    font-size: 0.75em;
-    font-weight: 400;
-    opacity: 0.8;
-    margin-right: 1px;
 }
 
 /* Fixed width so the power badge stays aligned regardless of digits */
@@ -2295,19 +2285,10 @@ tr.sub-row.highlighted-row .sub-row-name {
     margin: 0 16px 24px 52px;
 }
 
-/* Thin rule between the panel's form (type, notes, Rerun) and the reference
-   material under it (original change, screenshots). Stretched across the
-   layout, since its column flex otherwise sizes children to their content. */
-.rerun-panel-divider {
-    align-self: stretch;
-    margin: 8px 0 4px;
-    border: none;
-    border-top: 1px solid rgba(0, 0, 0, 0.1);
-}
-
-/* Show/hide link for the reference section under the divider. A text link
-   rather than a button: it reveals material, it doesn't act on the entry. */
+/* Show/hide link for the reference section under the panel's action. A text
+   link rather than a button: it reveals material, it doesn't act on the entry. */
 .rerun-reference-toggle {
+    margin-top: 8px;
     padding: 0;
     border: none;
     background: none;
@@ -2843,7 +2824,8 @@ tr.row-declined td.signal-on::before {
 }
 
 .summary-panel-success,
-.summary-panel-fpr {
+.summary-panel-fpr,
+.summary-panel-stat {
     flex: 0.25 1 auto;
     align-items: center;
     text-align: center;
@@ -2920,6 +2902,25 @@ tr.row-declined td.signal-on::before {
    rather than a full-height border flush with its edges -- a shorter rule
    with breathing room above/below reads as a quiet separator instead of a
    hard bracket around the content. */
+/* The subtitle over the bars. */
+.summary-sensitivity-bars {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+}
+
+/* "7 of 34 tests" and the like under a panel's number: quieter than it. */
+.summary-metric-count {
+    font-weight: 500;
+    color: var(--text-subtle);
+}
+
+/* Level with the other panels' numbers, below the bars' subtitle. */
+.summary-sensitivity-row .summary-sensitivity-median {
+    margin-top: 20px;
+}
+
 .summary-sensitivity-median::before {
     content: '';
     position: absolute;
@@ -2940,6 +2941,26 @@ tr.row-declined td.signal-on::before {
     grid-template-rows: 32px 16px;
     align-items: end;
     justify-items: center;
+}
+
+/* "tests" and "MDE" beside the bars, each level with its row. */
+.summary-threshold-rowlabels {
+    display: grid;
+    grid-template-rows: 32px 16px;
+    align-items: end;
+    justify-items: end;
+    flex-shrink: 0;
+}
+
+.summary-threshold-rowlabel {
+    font-size: 11px;
+    line-height: 1;
+    color: var(--text-subtle);
+}
+
+/* Level with a 0% column's percentage: above its 1px bar and the 2px gap. */
+.summary-threshold-rowlabel:first-child {
+    margin-bottom: 5px;
 }
 
 .summary-threshold-pct {
@@ -3087,17 +3108,20 @@ tr.row-declined td.signal-on::before {
         width: 36px;
     }
 
+    /* One row, always: a wrapped strip leaves the active tab cut off from
+       the table when it lands in the top row. Tabs share the width and their
+       labels wrap instead. */
     .tabs-container {
-        flex-wrap: wrap;
+        flex-wrap: nowrap;
         overflow: visible;
         gap: 4px;
         /* No bottom margin here either -- see the base rule. */
     }
 
     .tab {
-        flex: 1 1 120px;
-        min-width: 112px;
-        padding: 14px 12px;
+        flex: 1 1 0;
+        min-width: 0;
+        padding: 14px 8px;
         font-size: 13px;
     }
 
@@ -3137,7 +3161,8 @@ tr.row-declined td.signal-on::before {
     }
 
     .summary-panel-success,
-    .summary-panel-fpr {
+    .summary-panel-fpr,
+    .summary-panel-stat {
         flex: 1 1 0;
         min-width: 0;
     }
@@ -3166,6 +3191,26 @@ tr.row-declined td.signal-on::before {
 
     .summary-metric-median {
         font-size: 11px;
+    }
+}
+
+/* Too narrow for the sensitivity bars beside four panels: they take a row
+   of their own under the others. */
+@media (max-width: 1100px) {
+    .summary-bar {
+        flex-wrap: wrap;
+    }
+
+    .summary-panel-sensitivity {
+        order: 1;
+        flex: 1 1 100%;
+        margin-top: 12px;
+        padding: 12px 0 0;
+        border-top: 1px solid var(--border);
+    }
+
+    .summary-panel-sensitivity + .summary-divider {
+        display: none;
     }
 }
 
@@ -3208,6 +3253,7 @@ tr.row-declined td.signal-on::before {
 
     .summary-panel-success,
     .summary-panel-fpr,
+    .summary-panel-stat,
     .summary-panel-sensitivity {
         flex-basis: 100%;
     }
@@ -3217,9 +3263,15 @@ tr.row-declined td.signal-on::before {
         overflow-x: auto;
     }
 
+    /* Still one row: it scrolls sideways instead of wrapping. */
+    .tabs-container {
+        overflow-x: auto;
+        width: 100%;
+    }
+
     .tab {
-        flex-basis: 112px;
-        padding: 12px 10px;
+        flex: 0 0 104px;
+        padding: 12px 8px;
     }
 
     /* Let the long placeholder sentence wrap on narrow screens instead of
@@ -3413,4 +3465,340 @@ tr.row-declined td.signal-on::before {
 
 .amplitude-results-row .form-hint {
     margin-top: 0;
+}
+
+/* ---- Export tab ----
+   The rerun list as a document on white, in place of the table: name, type,
+   where it was found, and the notes at reading size. */
+.rerun-export {
+    display: none;
+    margin-bottom: 72px;
+    padding: 0 20px 40px;
+    background-color: var(--surface);
+    border-radius: 0 0 8px 8px;
+}
+
+.rerun-export-active .rerun-export {
+    display: block;
+}
+
+.rerun-export-active .table-container,
+.rerun-export-active #paginationControls {
+    display: none !important;
+}
+
+/* The row's height spacer is a flex item too; cancel its gap so the buttons
+   line up with the list below. */
+#rerunSharePanel::before {
+    margin-right: -6px;
+}
+
+.share-btn {
+    padding: 6px 14px;
+    font-family: inherit;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--accent);
+    background-color: var(--surface);
+    border: 1px solid var(--accent);
+    border-radius: 7px;
+    cursor: pointer;
+    transition: background-color 0.1s;
+}
+
+.share-btn:hover {
+    background-color: var(--hover-blue);
+}
+
+.share-btn-primary {
+    color: #fff;
+    background-color: var(--accent);
+}
+
+.share-btn-primary:hover {
+    background-color: var(--accent-dark);
+}
+
+.share-btn:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
+/* Printed only. */
+.rerun-export-heading {
+    display: none;
+}
+
+.rerun-export-item {
+    display: flex;
+    gap: 18px;
+    max-width: 1280px;
+    padding: 26px 0;
+    border-bottom: 1px solid var(--row-divider-soft);
+}
+
+.rerun-export-item:last-child {
+    border-bottom: none;
+}
+
+.rerun-export-tile {
+    flex: 0 0 auto;
+    width: 40px;
+    height: 40px;
+    padding: 6px;
+    background-color: var(--accent);
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background-color 0.1s;
+}
+
+.rerun-export-tile:hover {
+    background-color: var(--accent-dark);
+}
+
+.rerun-export-tile:focus-visible {
+    outline: 2px solid var(--accent-dark);
+    outline-offset: 2px;
+}
+
+.rerun-export-tile svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+.rerun-export-body {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.rerun-export-name {
+    font-size: 18px;
+    font-weight: 700;
+    line-height: 1.3;
+    color: var(--text-strong);
+    overflow-wrap: anywhere;
+}
+
+.rerun-export-name .experiment-id {
+    margin-left: 10px;
+}
+
+.rerun-export-name a {
+    color: inherit;
+    text-decoration: none;
+}
+
+.rerun-export-name a:hover {
+    text-decoration: underline;
+}
+
+.rerun-export-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 2px 6px;
+    margin-top: 4px;
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--text-muted);
+}
+
+.rerun-export-type {
+    margin-right: 8px;
+    font-weight: 700;
+    color: var(--text-strong);
+}
+
+.rerun-export-context {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.rerun-export-origin {
+    flex: 0 0 auto;
+    width: 22px;
+    height: 22px;
+    object-fit: contain;
+}
+
+/* After, not before: a wrapped line never starts with the dot. */
+.rerun-export-context:not(:last-child)::after {
+    content: '·';
+}
+
+.rerun-export-notes {
+    margin-top: 14px;
+    font-size: 16px;
+    line-height: 1.65;
+    color: var(--text-strong);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+/* A paragraph started by a typed "LABEL:", drawn as a pill before its text.
+   Grey, not blue: it isn't clickable. */
+.rerun-export-notes p + p {
+    margin-top: 6px;
+}
+
+/* Click to edit. The padding is cancelled by the margin, so the text stays
+   put while the hover tint reaches a little past it. */
+.rerun-export-notes.is-editable,
+.rerun-export-field.rerun-note-field {
+    width: calc(100% + 20px);
+    max-width: none;
+    margin: 8px -10px -6px;
+    padding: 6px 10px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+}
+
+.rerun-export-notes.is-editable {
+    cursor: text;
+}
+
+.rerun-export-notes.is-editable:hover {
+    background-color: var(--surface-soft);
+}
+
+.rerun-export-notes.is-editable:focus-visible {
+    outline: 2px solid var(--accent);
+}
+
+.rerun-export-field.rerun-note-field {
+    min-height: 0;
+    font-size: 16px;
+    line-height: 1.65;
+    background-color: var(--surface);
+    border-color: #c9d1da;
+}
+
+.rerun-export-notes a {
+    color: var(--accent);
+    text-decoration: underline;
+}
+
+.rerun-export-notes a:hover {
+    color: var(--accent-dark);
+}
+
+/* Beside the Notes label in the rerun panel. */
+.rerun-notes-heading {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0 10px;
+}
+
+.rerun-notes-hint {
+    font-size: 11px;
+    color: var(--text-subtle);
+}
+
+.rerun-export-pill {
+    display: inline-block;
+    margin-right: 9px;
+    padding: 3px 10px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    line-height: 1.5;
+    color: var(--text-strong);
+    background-color: var(--surface-control);
+    border-radius: 999px;
+    vertical-align: 2px;
+}
+
+.rerun-export-add-notes {
+    margin-top: 12px;
+    padding: 0;
+    border: none;
+    background: none;
+    font: inherit;
+    font-size: 13px;
+    color: var(--accent);
+    cursor: pointer;
+}
+
+.rerun-export-add-notes:hover {
+    text-decoration: underline;
+}
+
+.rerun-export-empty {
+    padding: 20px 0;
+    color: var(--text-muted);
+}
+
+/* Each part is on its own line here. */
+@media (max-width: 720px) {
+    .rerun-export-context:not(:last-child)::after {
+        display: none;
+    }
+}
+
+/* Printing from the Export tab: the document alone. */
+@media print {
+    body.rerun-export-active,
+    .rerun-export-active .container {
+        background: none;
+        padding: 0;
+        min-height: 0;
+    }
+
+    body.rerun-export-active > *:not(.container),
+    .rerun-export-active .container > *:not(.rerun-export),
+    .rerun-export-active .rerun-export-add-notes {
+        display: none !important;
+    }
+
+    .rerun-export-active .rerun-export {
+        margin: 0;
+        padding: 0;
+    }
+
+    .rerun-export-heading {
+        display: block;
+        padding-bottom: 8px;
+    }
+
+    .rerun-export-heading h1 {
+        font-size: 24px;
+        color: var(--text-strong);
+    }
+
+    .rerun-export-heading p {
+        font-size: 12px;
+        color: var(--text-muted);
+    }
+
+    .rerun-export-item {
+        max-width: none;
+        padding: 18px 0;
+    }
+
+    .rerun-export-name,
+    .rerun-export-meta {
+        break-after: avoid;
+    }
+
+    .rerun-export-meta {
+        font-size: 12px;
+    }
+
+    .rerun-export-notes.is-editable {
+        background: none;
+    }
+
+    .rerun-export-notes {
+        font-size: 14px;
+    }
+
+    .rerun-export-tile,
+    .rerun-export-pill {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
 }

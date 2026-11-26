@@ -5,13 +5,13 @@ Rerun is a browser-based experiment analysis dashboard for reviewing A/B test re
 ## What It Does
 
 - Loads demo experiment data from `data.json`, or imports real data: GrowthBook API, Amplitude Experiment Management API, PostHog API, Convert aggregated CSV exports, or a local JSON file already in the shape below. Mappers in `mappers/` normalize each platform into that shared shape.
-- Reads results three ways (**Method**): **As reported** uses each platform's own p-values (estimating the rest) and each test's own design; **Fixed horizon** and **Sequential (mSPRT)** recalculate every test as if it had been run that way. Tests can be two-sided, one-sided superiority, or non-inferiority with a margin.
-- Sequential (mSPRT) uses a fixed mixing ratio r = 7.84, tuned to an 80%-powered effect (p < 0.05 needs z ≈ 3.03) and checked against Amplitude's own mSPRT. Rerun's recalculations apply Bonferroni to tests with several variants, and use each continuous metric's real spread rather than an assumed one.
+- Reads results four ways (**Method**): **As reported** uses each platform's own p-values (estimating the rest) and each test's own design; **Fixed horizon**, **Sequential (mSPRT)** and **Group sequential** recalculate every test as if it had been run that way. Tests can be two-sided, one-sided superiority, or non-inferiority with a margin.
+- Sequential (mSPRT) uses a fixed mixing ratio r = 7.84, tuned to an 80%-powered effect (p < 0.05 needs z ≈ 3.03). Group sequential uses 5 evenly spaced looks (Lan-DeMets t³ alpha spending, non-binding futility). Sequential power is calculated exactly for each design (mSPRT: one check a day over the test's run). Rerun's recalculations apply Bonferroni to tests with several variants, and use each continuous metric's real spread rather than an assumed one.
 - Shows power at a chosen MDE, an adjustable significance level (Alpha), and per-test flags such as missing preregistration, average sample per day, run length (short runs flagged), and CUPED where the platform used it.
 - Shows reach against real site traffic where the platform allows it (PostHog site visitors, Amplitude active users), else labels the rollout as such.
 - Summarizes the whole program: success rate, Kohavi's false positive risk, and testing sensitivity (the share of tests powered to detect each effect size, plus the median MDE).
 - Highlights rerun candidates by scenario: Almost Significant, Squeeze The Lemon, Promising Losers, Too Good To Be True, and Too Good To Be False.
-- Builds a rerun list: pick a test design for each candidate (or a Ship it / Unship it decision), add notes and tags, compare its screenshots, and export or import the list as JSON.
+- Builds a rerun list: pick a test design for each candidate (or a Ship it / Unship it decision), add notes and tags, compare its screenshots, and export or import the list as JSON. The Export tab shows it as a plain document to copy, download as a single HTML file, print or save as PDF.
 
 ## Quick Start
 

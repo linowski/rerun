@@ -7,6 +7,8 @@
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
     <link rel="stylesheet" href="styles.css?v=20260902">
     <script src="stats-utils.js"></script>
+    <script src="sequential-design.js"></script>
+    <script src="always-valid-design.js"></script>
     <script src="mappers/mapper-utils.js"></script>
     <script src="mappers/resumable-results.js"></script>
     <script src="mappers/growthbook-mapper.js"></script>
@@ -28,10 +30,11 @@
                 <div class="mde-input-group">
                     <label for="powerMethodSelect" class="mde-label">Method</label>
                     <span class="method-select-wrap">
-                        <select id="powerMethodSelect" class="power-method-select" data-tip="As reported: the p-values your platform reported (estimated where a test has none), with power following each test's own method. Fixed horizon and Sequential (mSPRT) recalculate every test as if it had been run that way.">
+                        <select id="powerMethodSelect" class="power-method-select" data-tip="As reported: the p-values your platform reported (estimated where a test has none), with power following each test's own method. Fixed horizon, Sequential (mSPRT) and Group sequential recalculate every test as if it had been run that way.">
                             <option value="reported" selected>As reported</option>
                             <option value="fixed">Fixed horizon</option>
                             <option value="sequential">Sequential (mSPRT)</option>
+                            <option value="group">Group sequential</option>
                         </select>
                         <span class="method-note" id="methodNote"></span>
                     </span>
@@ -185,13 +188,13 @@
         </div>
 
         <div id="summaryBar" class="summary-bar">
-            <div class="summary-panel summary-panel-success">
+            <div class="summary-panel summary-panel-success" id="successRatePanel">
                 <div class="summary-panel-header">
-                    <span class="summary-panel-title">Success Rate of <wbr>First Time Tests</span>
-                    <span class="summary-panel-subtitle">Sig. positive results among first-time tests</span>
+                    <span class="summary-panel-title">Stat-Sig Rate</span>
+                    <span class="summary-panel-subtitle">Significant on each test’s own hypothesis</span>
                 </div>
                 <div class="summary-metric-value" id="successRateValue"></div>
-                <div class="summary-metric-median">median impact <span id="medianEffectValue"></span></div>
+                <div class="summary-metric-median"><span id="successCountValue"></span></div>
             </div>
             <div class="summary-divider"></div>
             <div class="summary-panel summary-panel-fpr" id="fprPanel">
@@ -200,29 +203,37 @@
                     <span class="summary-panel-subtitle">Probability that a sig. result is a false positive</span>
                 </div>
                 <div class="summary-metric-value" id="fprValue"></div>
+                <div class="summary-metric-median"><span id="fprCountValue"></span></div>
             </div>
             <div class="summary-divider"></div>
-            <div class="summary-panel summary-panel-success">
+            <div class="summary-panel summary-panel-stat">
                 <div class="summary-panel-header">
-                    <span class="summary-panel-title">Success Rate of <wbr>Iterations</span>
-                    <span class="summary-panel-subtitle">Sig. positive results among iterated tests</span>
+                    <span class="summary-panel-title">Median Impact</span>
+                    <span class="summary-panel-subtitle">Relative effect on the primary metric</span>
                 </div>
-                <div class="summary-metric-value" id="successRateIterValue"></div>
-                <div class="summary-metric-median">median impact <span id="medianEffectIterValue"></span></div>
+                <div class="summary-metric-value" id="medianEffectValue"></div>
+                <div class="summary-metric-median"><span id="medianEffectCountValue"></span></div>
             </div>
             <div class="summary-divider"></div>
             <div class="summary-panel summary-panel-sensitivity">
                 <div class="summary-panel-header">
                     <span class="summary-panel-title">Testing Sensitivity</span>
-                    <span class="summary-panel-subtitle">% of experiments with &ge;80% power / per MDE</span>
                 </div>
                 <div class="summary-sensitivity-row">
-                    <div class="summary-sensitivity-thresholds" id="sensitivityThresholds"></div>
-                    <div class="summary-sensitivity-median">
-                        <div class="summary-metric-value" id="medianMdeAt80Value"></div>
-                        <div class="summary-metric-median">median MDE</div>
+                    <div class="summary-sensitivity-bars">
+                        <span class="summary-panel-subtitle" id="sensitivitySubtitle">% of tests with &ge;80% power / per MDE</span>
+                        <div class="summary-sensitivity-thresholds" id="sensitivityThresholds"></div>
                     </div>
                 </div>
+            </div>
+            <div class="summary-divider"></div>
+            <div class="summary-panel summary-panel-stat">
+                <div class="summary-panel-header">
+                    <span class="summary-panel-title">Median MDE</span>
+                    <span class="summary-panel-subtitle">Minimum Detectable Effect at 80% power</span>
+                </div>
+                <div class="summary-metric-value" id="medianMdeAt80Value"></div>
+                <div class="summary-metric-median"><span id="medianMdeCountValue"></span></div>
             </div>
         </div>
 
@@ -233,6 +244,13 @@
                     <span id="rerunTabCount" class="rerun-count-badge" style="display: none;">0</span>
                 </span>
                 <span class="tab-label">Rerun</span>
+            </button>
+            <!-- A readable version of the list for sharing. Shown only while there is something on it (see updateExportTab). -->
+            <button class="tab" data-tab="rerun-export" style="display: none;">
+                <span class="tab-icon-wrap">
+                    <img src="images/iconRerunExport.svg" data-default="images/iconRerunExport.svg" data-selected="images/iconRerunExport_Sel.svg" alt="Export" class="tab-icon">
+                </span>
+                <span class="tab-label">Export</span>
             </button>
             <!-- Shown only while some loaded test is decided "Don't rerun" (see updateDeclinedTab). -->
             <button class="tab" data-tab="declined" style="display: none;">
@@ -327,6 +345,14 @@
                 <button type="button" id="rerunClearBtn" class="import-status-refresh rerun-clear-btn" data-tip="Remove every rerun shown here, with its notes, tags and type. Reruns saved for other data are kept.">Clear list</button>
                 <span id="rerunHiddenNote" class="rerun-hidden-note"></span>
             </div>
+
+            <!-- Export tab: ways to share the list. -->
+            <div id="rerunSharePanel" class="tab-params-panel">
+                <button type="button" id="shareCopyBtn" class="share-btn share-btn-primary" data-tip="Copy the list with formatting and links, to paste into a doc, email or chat.">Copy</button>
+                <button type="button" id="shareMarkdownBtn" class="share-btn" data-tip="Copy the list as Markdown, for GitHub, Notion or a ticket.">Copy Markdown</button>
+                <button type="button" id="shareHtmlBtn" class="share-btn" data-tip="One file that looks like this page, icons included. Opens in any browser, so it can be attached or sent as is.">Download HTML</button>
+                <button type="button" id="sharePrintBtn" class="share-btn" data-tip="Print just this list, or choose “Save as PDF” in the print dialog.">Print / PDF</button>
+            </div>
         </div>
 
         <div id="highlightNav" class="highlight-nav" data-tip="Jump between highlighted rows (↑ / ↓)">
@@ -334,6 +360,9 @@
             <span id="highlightCount" class="highlight-nav-count">0 / 0</span>
             <button id="highlightNext" class="highlight-nav-btn" aria-label="Next highlight">&#9660;</button>
         </div>
+
+        <!-- Export tab: filled by renderRerunExport(), in place of the table. -->
+        <div id="rerunExportView" class="rerun-export"></div>
 
         <div class="table-container">
             <table>
@@ -420,9 +449,16 @@
         }
 
         // 'reported' (the platform's own p-values), or 'fixed' / 'sequential'
-        // (every test recalculated as if run that way).
+        // (mSPRT) / 'group' (group sequential): every test recalculated as if
+        // run that way.
+        const POWER_METHODS = ['reported', 'fixed', 'sequential', 'group'];
         function getPowerMethod() {
             return document.getElementById('powerMethodSelect')?.value || 'reported';
+        }
+
+        // Both sequential lenses cut p-values at their own SEQUENTIAL_ALPHA.
+        function isSequentialLens(method = getPowerMethod()) {
+            return method === 'sequential' || method === 'group';
         }
 
         function isPValue(value) {
@@ -439,7 +475,7 @@
 
         // Significance threshold for the P-val columns (fixed horizon only)
         // and the False Positive Risk calculation -- see pvalueCell and
-        // updateSummaryBar. Sequential mode keeps its own fixed
+        // updateSummaryBar. The sequential modes keep their own fixed
         // SEQUENTIAL_ALPHA, out of scope for this control.
         function getSelectedAlpha() {
             const value = parseFloat(document.getElementById('alphaInput')?.value);
@@ -472,12 +508,12 @@
 
         // Fixed-horizon: classic power at the pre-set sample size, plain
         // p-values. Sequential (mSPRT): the always-valid p-value (safe to
-        // check at any time) in place of the plain p-value, and power
-        // approximated via the ~1.3x sample-size inflation the method costs
-        // relative to fixed-horizon for the same power (see
-        // SEQUENTIAL_SAMPLE_SIZE_INFLATION in stats-utils.js) -- there is no
-        // exact closed form for sequential power the way there is for a
-        // one-shot z-test.
+        // check at any time) in place of the plain p-value, and the exact
+        // power of a test checked once a day over the test's run
+        // (SEQUENTIAL_DEFAULT_PEEKS checks when the dates are missing). Group
+        // sequential: the repeated p-value at the last of 5 looks, and the
+        // 5-look design's power. See recalculateSequentialPower and
+        // groupSequentialPValue in stats-utils.js.
         //
         // As reported: the platform's own p-values where the test has them
         // (estimated, and flagged as such, where it doesn't), and power
@@ -506,8 +542,14 @@
             // Only a platform that actually ran a sequential test reports an
             // always-valid p; an assumed-sequential one reported a plain p.
             const knownSequential = recordedMethod === 'sequential';
-            const sequential = method === 'sequential'
-                || (method === 'reported' && testMethod === 'sequential');
+            // The sequential lens: 'group' only when chosen; 'msprt' when
+            // chosen, or as reported for a sequential (or unrecorded) test.
+            const sequential = method === 'group' ? 'group'
+                : method === 'sequential' || (method === 'reported' && testMethod === 'sequential') ? 'msprt'
+                : null;
+            // mSPRT power: one check a day over the test's own run (a
+            // comparison row runs as long as its parent).
+            const runDays = daysRunning(item) ?? (parent ? daysRunning(parent) : null);
             const hypothesis = item.hypothesis || parent?.hypothesis || 'two-sided';
             const ownMargin = item.niMargin ?? parent?.niMargin;
             const niMargin = ownMargin > 0 ? ownMargin : mde;
@@ -516,7 +558,8 @@
             const primaryCV = item.primaryCV ?? parent?.primaryCV ?? null;
             const secondaryCV = item.secondaryCV ?? parent?.secondaryCV ?? null;
             const power = sequential
-                ? recalculatePower(item.sampleSize / SEQUENTIAL_SAMPLE_SIZE_INFLATION, item.primaryMetricType, mde, baseRate, primaryCV)
+                ? recalculateSequentialPower(item.sampleSize, item.primaryMetricType, mde, baseRate, primaryCV, sequential,
+                    runDays || SEQUENTIAL_DEFAULT_PEEKS)
                 : recalculatePower(item.sampleSize, item.primaryMetricType, mde, baseRate, primaryCV);
 
             // Bonferroni for tests with several variants: each comparison
@@ -542,7 +585,9 @@
                         uncorrected: reportedCorrection > 1 ? reportedUncorrected : null, byPlatform: true };
                 }
                 const raw = twoSided
-                    ? (sequential ? recalculateSequentialPValue : recalculatePValue)(item.sampleSize, metricType, effect, rate, cv)
+                    ? (sequential
+                        ? recalculateSequentialPValue(item.sampleSize, metricType, effect, rate, cv, sequential)
+                        : recalculatePValue(item.sampleSize, metricType, effect, rate, cv))
                     : hypothesisPValue(recalculatePValue(item.sampleSize, metricType, effect, rate, cv), effect, hyp, niMargin, sequential);
                 const value = raw == null || arms < 2 ? raw : Math.min(1, raw * arms);
                 return { value, estimated: method === 'reported', correction: arms > 1 && raw != null ? arms : null,
@@ -561,7 +606,9 @@
                 hypothesis,
                 niMarginUsed: hypothesis === 'non-inferiority' ? niMargin : null,
                 power,
-                powerApprox: sequential,
+                // 'msprt' | 'group' | null: how power and p were read
+                sequentialLens: sequential,
+                powerPeeks: sequential === 'msprt' ? (runDays || null) : null,
                 pvalue: primary.value,
                 pvalueEstimated: primary.estimated && primary.value != null,
                 pvalueCorrectionInfo: primary.correction ? primary : null,
@@ -839,9 +886,9 @@
         // Maps a p-value onto the same 0-100 red-orange-green scale as the
         // power badge, so both columns read consistently: p == alpha lands at
         // the 50% (orange) boundary rather than an arbitrary point. Fixed
-        // horizon cuts at the header's Alpha input; Sequential keeps its own
-        // fixed SEQUENTIAL_ALPHA (p <= alpha is the mSPRT's stopping rule, valid
-        // whenever you check -- see stats-utils.js).
+        // horizon cuts at the header's Alpha input; the sequential modes keep
+        // their own fixed SEQUENTIAL_ALPHA (p <= alpha is the stopping rule the
+        // design was built for -- see stats-utils.js).
         const SEQUENTIAL_ALPHA = 0.05;
         function pvalueStrength(pvalue, alpha) {
             if (pvalue <= alpha) {
@@ -879,7 +926,7 @@
         // `missingReason`: why the platform gave no p-value, shown with an estimate.
         function pvalueCell(colClass, pvalue, estimated, d = null, correction = null, missingReason = null) {
             if (pvalue == null) return `<td class="${colClass} pvalue"></td>`;
-            const alpha = getPowerMethod() === 'sequential' ? SEQUENTIAL_ALPHA : getSelectedAlpha();
+            const alpha = isSequentialLens() ? SEQUENTIAL_ALPHA : getSelectedAlpha();
             const color = sensitivityColor(pvalueStrength(pvalue, alpha));
             const hypothesis = d?.hypothesis && d.hypothesis !== 'two-sided' ? d.hypothesis : null;
             const marginSource = d?.niMargin > 0 ? 'the test’s own margin' : 'the MDE input';
@@ -985,9 +1032,9 @@
                 <td class="col-power">
                     <div class="power-group">
                         <div class="power-col">
-                            <span class="power-value power-badge" style="background-color: ${d.power != null ? sensitivityColor(d.power) : '#999'}"${d.powerApprox
-                                ? ` data-tip="Approximate: sequential (mSPRT) power, estimated as fixed-horizon power at this sample size ÷ ${SEQUENTIAL_SAMPLE_SIZE_INFLATION} -- the extra sample an always-valid test needs for the same power."`
-                                : ''}>${d.powerApprox && d.power != null ? '<span class="power-approx">≈</span>' : ''}${displayValue(d.power, '%')}</span>
+                            <span class="power-value power-badge" style="background-color: ${d.power != null ? sensitivityColor(d.power) : '#999'}"${d.sequentialLens && d.power != null
+                                ? ` data-tip="${escapeAttr(sequentialPowerTip(d))}"`
+                                : ''}>${displayValue(d.power, '%')}</span>
                             <span class="power-stat-label">${getSelectedMde()}% MDE</span>
                         </div>
                     </div>
@@ -1170,10 +1217,39 @@
         const SEQUENTIAL_NOTES = [
             'Sequential (mSPRT) recalculates every test as if it had been run as an always-valid sequential test, so checking results early (peeking) is paid for.',
             `Setting: mixing ratio r = ${SEQUENTIAL_MSPRT_R.toFixed(1)}, tuned to an effect the test is 80%-powered for: (1.96 + 0.84)². p < 0.05 then needs z ≈ 3.03 (fixed horizon: 1.96). Any r from about 5 to 10 gives z ≈ 3.0–3.1.`,
-            'Checked against Amplitude’s own mSPRT on 34 test arms: the same significant / not-significant call on 32 (the earlier r = 1, needing z ≈ 3.66, matched 28). The best fit there was r ≈ 6.5, practically the same threshold; r comes from the power rule, not that fit.',
+            'Method: the always-valid mSPRT of Johari, Pekelis & Walsh (after Robbins 1970), with a fixed mixing ratio so the cut-off doesn’t depend on sample size.',
             'Tests with several variants: each p-value × the number of comparisons with control (Bonferroni), as platforms do.',
-            'Judged on the final numbers only. Platforms report the lowest p reached during a test and may reduce variance with CUPED, so their own (As reported) p-values can be lower. Power is approximate: fixed-horizon power at the sample size ÷ 1.3.'
+            'Judged on the final numbers only. Platforms report the lowest p reached during a test and may reduce variance with CUPED, so their own (As reported) p-values can be lower.',
+            `Power: calculated exactly for a test checked once a day over its run (${SEQUENTIAL_DEFAULT_PEEKS} checks when the dates are missing). Being valid at every check costs about 1.6–1.8× the fixed-horizon sample for the same power.`
         ].join('\n\n');
+
+        // Same, for Group sequential. Keep in step with groupSequentialPValue
+        // in stats-utils.js and sequential-design.js.
+        const GROUP_FINAL_Z = SequentialDesign.bounds(SEQUENTIAL_POWER_ALPHA).efficacy[SequentialDesign.LOOKS - 1];
+        // Fixed horizon's assumption, shown as the tooltip on its note.
+        const FIXED_NOTES = [
+            'Fixed horizon reads each test once, at its final sample size, as if that size was set before launch and nobody stopped early on the results.',
+            'If people did peek and stop when it looked good, the real false positive rate is higher than alpha. Sequential (mSPRT) and Group sequential price that in.',
+            'The Sample size column flags fixed-horizon tests with no planned size ("No prereg"), or that stopped short of it.'
+        ].join('\n\n');
+
+        const GROUP_NOTES = [
+            `Group sequential recalculates every test as if it had been run with ${SequentialDesign.LOOKS} planned, evenly spaced looks, stopping early on a clear win or loss, or for futility.`,
+            `Boundaries: Lan-DeMets alpha spending with the Kim-DeMets (α/2)·t³ function on each side; futility by beta spending (Pampallona et al.), non-binding, so it never adds false wins. p < 0.05 at the last look needs z ≈ ${GROUP_FINAL_Z.toFixed(2)} (fixed horizon: 1.96).`,
+            'P-value: the repeated p-value at the last look (Jennison & Turnbull), the smallest α whose design would reject with the final z. Judged on the final numbers only, read as the last look.',
+            'Tests with several variants: each p-value × the number of comparisons with control (Bonferroni), as platforms do.',
+            `Power: calculated exactly for the ${SequentialDesign.LOOKS}-look design at the test's sample size. It costs about 1.1× the fixed-horizon sample for the same power.`
+        ].join('\n\n');
+
+        // Power badge tooltip for a test read sequentially.
+        function sequentialPowerTip(d) {
+            if (d.sequentialLens === 'group') {
+                return `Group sequential power: ${SequentialDesign.LOOKS} evenly spaced looks over this sample, at the MDE.`;
+            }
+            return d.powerPeeks
+                ? `Sequential (mSPRT) power: checked once a day over ${d.powerPeeks} day${d.powerPeeks === 1 ? '' : 's'}, at the MDE.`
+                : `Sequential (mSPRT) power: checked ${SEQUENTIAL_DEFAULT_PEEKS} times (no run dates to count days), at the MDE.`;
+        }
 
         function updateMethodNote() {
             const note = document.getElementById('methodNote');
@@ -1182,6 +1258,16 @@
             if (getPowerMethod() === 'sequential') {
                 note.textContent = `mSPRT, r = ${SEQUENTIAL_MSPRT_R.toFixed(1)} · how it works`;
                 note.dataset.tip = SEQUENTIAL_NOTES;
+                return;
+            }
+            if (getPowerMethod() === 'group') {
+                note.textContent = `${SequentialDesign.LOOKS} looks, t³ spending · how it works`;
+                note.dataset.tip = GROUP_NOTES;
+                return;
+            }
+            if (getPowerMethod() === 'fixed') {
+                note.textContent = '1 look, at a planned sample size · how it works';
+                note.dataset.tip = FIXED_NOTES;
                 return;
             }
             if (getPowerMethod() !== 'reported') { note.textContent = ''; return; }
@@ -1213,6 +1299,7 @@
             view.page = 0;
             syncRerunEntriesToDataset();
             updateDeclinedTab();
+            updateExportTab();
             const activeTab = document.querySelector('.tab.active');
             if (activeTab) {
                 updateHighlighting(activeTab.dataset.tab, { keepSort: keepPage });
@@ -1320,6 +1407,10 @@
             rerun: {
                 title: 'Your Rerun List',
                 subtitle: 'Plan a rerun from any tab: open a test’s rerun panel and press Rerun.'
+            },
+            'rerun-export': {
+                title: 'Export',
+                subtitle: 'Your rerun list, ready to share.'
             },
             'almost-significant': {
                 title: 'Your "Almost" Significant Tests',
@@ -1694,10 +1785,12 @@
         // How the rerun should be structured. `variants` draws the little A/B/C
         // diagram: `muted` is a low-powered arm, `strong` an emphasised one, and
         // `split` marks where one test ends and the follow-up begins.
+        // `statement` is the label as a full phrase, for the Export tab.
         const RERUN_TYPES = [
             {
                 id: 'same-as-original',
                 label: 'Same as original',
+                statement: 'Rerun same as original',
                 description: 'Rerun the experiment as it was.',
                 // No diagram: the structure is unchanged, so there is nothing to
                 // show. The circles are there to describe a *new* shape.
@@ -1707,6 +1800,7 @@
             {
                 id: 'meta-analyze',
                 label: 'Same as original + Meta-analyze',
+                statement: 'Rerun same as original + meta-analyze',
                 description: 'Combine with the original run for more power.',
                 variants: [
                     { text: 'A' }, { text: 'B' },
@@ -1717,6 +1811,7 @@
             {
                 id: 'single-variable',
                 label: 'Single-Variable',
+                statement: 'Rerun as a single-variable test',
                 description: 'Single change A/B test.',
                 variants: [{ text: 'A' }, { text: 'B' }],
                 icon: 'A/B'
@@ -1724,6 +1819,7 @@
             {
                 id: 'exploratory',
                 label: 'Exploratory',
+                statement: 'Rerun as an exploratory test',
                 description: 'Several variations tested at once.',
                 variants: [{ text: 'A' }, { text: 'B' }, { text: 'C' }, { text: 'D' }],
                 icon: 'ABC'
@@ -1731,6 +1827,7 @@
             {
                 id: 'exploratory-confirmatory',
                 label: 'Exploratory + Confirmatory',
+                statement: 'Rerun as exploratory + confirmatory tests',
                 description: 'Lower power first, higher power second.',
                 variants: [
                     { text: 'A' }, { text: 'b', muted: true }, { text: 'c', muted: true },
@@ -1741,6 +1838,7 @@
             {
                 id: 'leap-compound',
                 label: 'Leap Compound',
+                statement: 'Rerun as a leap compound',
                 description: 'Multiple simultaneous changes in one variant.',
                 variants: [{ text: 'A' }, { text: 'B', strong: true }],
                 icon: 'x+y+z'
@@ -1748,6 +1846,7 @@
             {
                 id: 'intensify',
                 label: 'Intensify',
+                statement: 'Rerun with the change intensified',
                 description: 'The same change, turned up.',
                 variants: [{ text: 'A' }, { text: 'B*2' }],
                 icon: 'x*2'
@@ -1755,6 +1854,7 @@
             {
                 id: 'reduce',
                 label: 'Reduce',
+                statement: 'Rerun with the change reduced',
                 description: 'The same change, turned down.',
                 variants: [{ text: 'A' }, { text: 'B/2' }],
                 icon: 'x/2'
@@ -1762,6 +1862,7 @@
             {
                 id: 'remove',
                 label: 'Remove',
+                statement: 'Rerun with the element removed',
                 description: 'Take the element away entirely.',
                 // The empty set marks the arm where the element is gone.
                 variants: [{ text: 'A' }, { text: '∅', muted: true }],
@@ -1770,6 +1871,7 @@
             {
                 id: 'invert',
                 label: 'Invert',
+                statement: 'Rerun with the change inverted',
                 description: 'Do the opposite of the original change.',
                 variants: [{ text: 'A' }, { text: '−B' }],
                 icon: '−x'
@@ -1777,6 +1879,7 @@
             {
                 id: 'intensity',
                 label: 'Elasticity',
+                statement: 'Rerun as an elasticity test',
                 description: 'One change at varying strengths.',
                 variants: [{ text: 'A' }, { text: 'B+' }, { text: 'B++' }],
                 icon: 'x++'
@@ -1784,6 +1887,7 @@
             {
                 id: 'cascade',
                 label: 'Cascade',
+                statement: 'Rerun as a cascade',
                 description: 'Each change builds on the last.',
                 variants: [{ text: 'A' }, { text: 'B' }, { text: 'B+C' }],
                 icon: 'x→x\''
@@ -1794,6 +1898,7 @@
             {
                 id: 'ship-it',
                 label: 'Ship it',
+                statement: 'Ship it without a rerun',
                 group: 'Decide',
                 description: 'No rerun: roll the winning variant out.',
                 variants: [],
@@ -1802,6 +1907,7 @@
             {
                 id: 'unship-it',
                 label: 'Unship it',
+                statement: 'Unship it without a rerun',
                 group: 'Decide',
                 description: 'No rerun: roll back to the original.',
                 variants: [],
@@ -2933,13 +3039,17 @@
 
         // The one place rows are written to the document.
         function renderView(tabType = getActiveTabType()) {
-            view.filtered = tabType === 'rerun'
+            const exporting = tabType === 'rerun-export';
+            document.body.classList.toggle('rerun-export-active', exporting);
+            view.filtered = tabType === 'rerun' || exporting
                 ? rerunViewRows()
                 : sortViewRows(filterViewRows(tabType), tabType);
             view.page = Math.min(Math.max(0, view.page), totalPages() - 1);
 
             const start = view.page * view.pageSize;
-            const pageRows = view.filtered.slice(start, start + view.pageSize);
+            // The export is one document (no pages), drawn outside the table.
+            const pageRows = exporting ? [] : view.filtered.slice(start, start + view.pageSize);
+            if (exporting) renderRerunExport();
 
             // Row-scoped UI points at elements that are about to be discarded, and
             // a notes field still holding focus would lose an uncommitted edit.
@@ -4654,6 +4764,7 @@
             saveRerunSelection();
             updateRerunTabCount();
             updateDeclinedTab();
+            updateExportTab();
             if (getActiveTabType() === 'rerun') {
                 renderView('rerun');
                 updateTitle('rerun');
@@ -4986,10 +5097,14 @@
                 declined: Array.from(declinedReruns, ([experimentKey, { name, ...record }]) =>
                     ({ experimentKey, experimentName: name, ...record }))
             };
-            const blob = new Blob([JSON.stringify(payload, null, 2) + '\n'], { type: 'application/json' });
+            downloadFile(`reruns-${new Date().toISOString().slice(0, 10)}.json`,
+                JSON.stringify(payload, null, 2) + '\n', 'application/json');
+        }
+
+        function downloadFile(name, content, type) {
             const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.download = `reruns-${new Date().toISOString().slice(0, 10)}.json`;
+            link.href = URL.createObjectURL(new Blob([content], { type }));
+            link.download = name;
             document.body.appendChild(link);
             link.click();
             link.remove();
@@ -5072,6 +5187,469 @@
             if (!file) return;
             file.text().then(importRerunList);
             rerunImportInput.value = '';
+        });
+
+        // ---- Export tab ---------------------------------------------------
+        // The rerun list as a plain document: name, test type, the scenario it
+        // came from, and the notes. Shown in the Rerun tab's order and following
+        // the search, and shared as it shows.
+
+        // Shown only while there is something to export; if the list empties
+        // while it is open, the view moves to the Rerun tab.
+        function updateExportTab() {
+            const tab = document.querySelector('.tab[data-tab="rerun-export"]');
+            if (!tab) return;
+            const n = rerunInstances.length;
+            tab.style.display = n ? '' : 'none';
+            if (!n && tab.classList.contains('active')) {
+                document.querySelector('.tab[data-tab="rerun"]')?.click();
+            }
+        }
+
+        function rerunExportName(viewRow) {
+            const name = viewRow.experiment.name || 'Untitled';
+            return viewRow.kind === 'sub' ? `${name} (vs. ${viewRow.comparison.variationName})` : name;
+        }
+
+        // The original result in a few words: "+7% sales, p = 0.078, n = 52,000". The effect
+        // is rounded and the metric name loses its bracketed detail; the
+        // p-value is the table's own, so it follows Method.
+        function rerunExportResult(item) {
+            const n = parseFloat(item.primaryMetric);
+            const rounded = Number(n.toFixed(Math.abs(n) >= 10 ? 0 : 1));
+            const effect = Number.isFinite(n) ? `${rounded > 0 ? '+' : ''}${rounded}%` : '';
+            const metric = String(item.primaryMetricLabel || '').replace(/\s*\([^)]*\)/g, '').trim();
+            const p = formatPValue(item.pvalue);
+            return [
+                effect && [effect, metric].filter(Boolean).join(' '),
+                p && `p ${p.startsWith('<') ? p : `= ${p}`}${item.pvalueEstimated ? ' (estimated)' : ''}`,
+                item.sampleSize > 0 && `n = ${formatNumber(item.sampleSize)}`
+            ].filter(Boolean).join(', ');
+        }
+
+        function rerunExportEntries() {
+            const rows = rerunViewRows().filter(viewRow => viewRow.instanceId);
+            const groupOf = viewRow => detailFor(viewRow.instanceId).compoundGroup;
+            return rows.map(viewRow => {
+                const { origin, notes } = detailFor(viewRow.instanceId);
+                const url = viewRow.experiment.url;
+                const group = groupOf(viewRow);
+                return {
+                    instanceId: viewRow.instanceId,
+                    selectionKey: viewRow.selectionKey,
+                    name: rerunExportName(viewRow),
+                    code: viewRow.experiment.id ? String(viewRow.experiment.id) : '',
+                    url: /^https?:\/\//i.test(url || '') ? url : '',
+                    type: RERUN_TYPE_BY_ID.get(rerunTypeFor(viewRow.instanceId)),
+                    origin,
+                    originLabel: TAB_SHORT_LABEL[origin] || '',
+                    result: rerunExportResult(viewRow.item),
+                    compoundWith: group
+                        ? rows.filter(other => other !== viewRow && groupOf(other) === group).map(rerunExportName)
+                        : [],
+                    notes: String(notes || '').trim()
+                };
+            });
+        }
+
+        function rerunExportHeading(entries) {
+            const date = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+            // Which p-values these are, since readers can't see the Method input.
+            const method = { reported: 'as reported', fixed: 'fixed horizon', sequential: 'sequential (mSPRT)', group: 'group sequential' }[getPowerMethod()];
+            return { title: 'Rerun plan', detail: `${date} · ${entries.length} rerun${entries.length === 1 ? '' : 's'} · p-values ${method}` };
+        }
+
+        // "Almost Significant: +7% sales, p = 0.078, n = 52,000", "Compound with
+        // X": what follows the type.
+        function rerunExportContext(entry) {
+            return [
+                [entry.originLabel, entry.result].filter(Boolean).join(': '),
+                entry.compoundWith.length && `Compound with ${entry.compoundWith.join(', ')}`
+            ].filter(Boolean);
+        }
+
+        // Splits notes into paragraphs at labels typed as "LABEL: text": all
+        // caps and a colon, at the start of a line or after a sentence. A single
+        // letter (a variant, "B: ...") counts at the start of a line only. Text
+        // before the first label is a paragraph without one.
+        function noteParagraphs(notes) {
+            const LABEL = /(?:(?:^|\n)[ \t]*(\p{Lu}(?:[\p{Lu}\d &\/'’+-]{0,38}[\p{Lu}\d])?)|(?<=[.!?])[ \t]+(\p{Lu}[\p{Lu}\d &\/'’+-]{0,38}[\p{Lu}\d])):(?=\s|$)/gu;
+            const text = String(notes).replace(/\r\n?/g, '\n');
+            const marks = [...text.matchAll(LABEL)];
+            const paragraphs = [{ label: '', text: text.slice(0, marks[0]?.index ?? text.length) },
+                ...marks.map((mark, i) => ({
+                    label: mark[1] || mark[2],
+                    text: text.slice(mark.index + mark[0].length, marks[i + 1]?.index ?? text.length)
+                }))];
+            return paragraphs
+                .map(({ label, text }) => ({ label, text: text.trim() }))
+                .filter(({ label, text }) => label || text);
+        }
+
+        // Splits text at web addresses: [{ text }] and [{ text, url }], where a
+        // link's text is its site and path, "…" standing for the rest.
+        // Punctuation that ends the sentence stays out of the link.
+        function linkParts(text) {
+            const parts = [];
+            let last = 0;
+            for (const match of String(text).matchAll(/https?:\/\/[^\s<>"]+/gi)) {
+                let url = match[0].replace(/[.,;:!?'\]]+$/, '');
+                if (url.endsWith(')') && !url.includes('(')) url = url.replace(/\)+[.,;:!?]*$/, '');
+                let short;
+                try {
+                    const { host, pathname, search, hash } = new URL(url);
+                    const path = `${host.replace(/^www\./, '')}${pathname.replace(/\/$/, '')}`;
+                    const cut = path.length > 60;
+                    short = `${cut ? path.slice(0, 59) : path}${cut || search || hash ? '…' : ''}`;
+                } catch { continue; }
+                parts.push({ text: text.slice(last, match.index) }, { text: short, url });
+                last = match.index + url.length;
+            }
+            parts.push({ text: text.slice(last) });
+            return parts.filter(part => part.text);
+        }
+
+        // An entry's notes as read: labels as pills, short links. A click turns
+        // them into a text box holding the notes as typed (editExportNotes).
+        function buildExportNotes(instanceId) {
+            const notes = String(detailFor(instanceId).notes || '').trim();
+            if (!notes) {
+                return el('button', {
+                    type: 'button',
+                    class: 'rerun-export-add-notes',
+                    textContent: 'Add notes',
+                    dataset: { entryKey: instanceId }
+                });
+            }
+            return el('div', {
+                class: 'rerun-export-notes is-editable',
+                tabIndex: 0,
+                dataset: { entryKey: instanceId }
+            }, noteParagraphs(notes).map(({ label, text }) =>
+                el('p', { class: label ? 'rerun-export-labelled' : '' }, [
+                    label ? el('span', { class: 'rerun-export-pill', textContent: label }) : null,
+                    ...linkParts(text).map(part => part.url
+                        ? el('a', { href: part.url, target: '_blank', rel: 'noopener', textContent: part.text })
+                        : el('span', { textContent: part.text }))
+                ])));
+        }
+
+        // Edits the entry's own notes (the ones on the Rerun tab) in place. As a
+        // .rerun-note-field it shares that field's growing, Escape, and saving
+        // before anything re-renders (commitOpenNotesField).
+        function editExportNotes(target) {
+            const entryKey = target.dataset.entryKey;
+            const field = el('textarea', {
+                class: 'rerun-note-field rerun-export-field',
+                rows: 1,
+                placeholder: 'What to change. Start a line with LABEL: to show it as a pill.',
+                value: detailFor(entryKey).notes || '',
+                'aria-label': 'Notes',
+                dataset: { entryKey }
+            });
+            target.replaceWith(field);
+            autoGrowNotesField(field);
+            field.focus({ preventScroll: true });
+            field.setSelectionRange(field.value.length, field.value.length);
+            return field;
+        }
+
+        function closeExportField(field) {
+            if (!field.isConnected) return;
+            if (rerunEntryExists(field.dataset.entryKey)) saveRerunNotes(field.dataset.entryKey, field.value);
+            field.replaceWith(buildExportNotes(field.dataset.entryKey));
+        }
+
+        // Saved and shown as read again: before the document is shared.
+        function closeExportFields() {
+            document.querySelectorAll('.rerun-export-field').forEach(closeExportField);
+        }
+
+        function renderRerunExport() {
+            const host = document.getElementById('rerunExportView');
+            // A redraw while typing (results arriving, say) keeps the box open.
+            commitOpenNotesField();
+            const open = document.activeElement?.closest?.('.rerun-export-field');
+            const typing = open && { key: open.dataset.entryKey, value: open.value, start: open.selectionStart, end: open.selectionEnd };
+            const entries = rerunExportEntries();
+            const heading = rerunExportHeading(entries);
+
+            const items = entries.map(entry => {
+                // The type tile, as on the Rerun tab; a click goes to the entry
+                // there, where it is edited.
+                const tile = el('button', {
+                    type: 'button',
+                    class: 'rerun-export-tile',
+                    'aria-label': `${entry.type?.statement || 'Rerun'}: edit on the Rerun tab`,
+                    dataset: { instanceId: entry.instanceId, selectionKey: entry.selectionKey, tip: 'Edit on the Rerun tab' }
+                });
+                tile.innerHTML = RERUN_TYPE_ICON_SVG[entry.type?.id] || '';
+
+                const originSrc = TAB_ORIGIN_ICON[entry.origin];
+                return el('article', { class: 'rerun-export-item' }, [
+                    tile,
+                    el('div', { class: 'rerun-export-body' }, [
+                        el('h2', { class: 'rerun-export-name' }, [
+                            entry.url
+                                ? el('a', { href: entry.url, target: '_blank', rel: 'noopener', textContent: entry.name })
+                                : el('span', { textContent: entry.name }),
+                            // The same code the table shows under the name.
+                            entry.code ? el('span', { class: 'experiment-id', textContent: entry.code }) : null
+                        ]),
+                        el('div', { class: 'rerun-export-meta' }, [
+                            el('span', { class: 'rerun-export-type', textContent: entry.type?.statement || '' }),
+                            // The scenario's icon wraps together with its name.
+                            ...rerunExportContext(entry).map((text, i) =>
+                                el('span', { class: 'rerun-export-context' }, [
+                                    i === 0 && originSrc
+                                        ? el('img', { class: 'rerun-export-origin', src: originSrc, alt: '' }) : null,
+                                    el('span', { textContent: text })
+                                ]))
+                        ]),
+                        buildExportNotes(entry.instanceId)
+                    ])
+                ]);
+            });
+
+            host.replaceChildren(
+                // Printed only: on screen the page title already says it.
+                el('header', { class: 'rerun-export-heading' }, [
+                    el('h1', { textContent: heading.title }),
+                    el('p', { textContent: heading.detail })
+                ]),
+                ...(items.length ? items : [el('p', { class: 'rerun-export-empty', textContent: 'No reruns match the search.' })])
+            );
+            const reopen = typing && host.querySelector(`[data-entry-key="${CSS.escape(typing.key)}"]`);
+            if (reopen) {
+                const field = editExportNotes(reopen);
+                field.value = typing.value;
+                autoGrowNotesField(field);
+                field.setSelectionRange(typing.start, typing.end);
+            }
+            ['shareCopyBtn', 'shareMarkdownBtn', 'shareHtmlBtn', 'sharePrintBtn'].forEach(id => {
+                document.getElementById(id).disabled = !items.length;
+            });
+        }
+
+        const rerunExportView = document.getElementById('rerunExportView');
+        rerunExportView.addEventListener('click', e => {
+            const notes = e.target.closest('.rerun-export-notes, .rerun-export-add-notes');
+            // Links open, and selecting text to copy doesn't start an edit.
+            if (notes && !e.target.closest('a') && !String(window.getSelection() || '')) {
+                editExportNotes(notes);
+                return;
+            }
+            const target = e.target.closest('.rerun-export-tile');
+            if (!target) return;
+            const { selectionKey, instanceId } = target.dataset;
+            showRowOnRerunTab({ dataset: { selectionKey } }, instanceId);
+            focusNotesFieldFor(tableBody.querySelector(`tr[data-instance-id="${CSS.escape(instanceId)}"]`), { preventScroll: true });
+        });
+
+        rerunExportView.addEventListener('keydown', e => {
+            if (e.key !== 'Enter' || !e.target.matches('.rerun-export-notes')) return;
+            e.preventDefault();
+            editExportNotes(e.target);
+        });
+        rerunExportView.addEventListener('input', e => {
+            if (e.target.matches('.rerun-export-field')) autoGrowNotesField(e.target);
+        });
+
+        // Leaving the box saves at once, but it turns back into reading text
+        // only after the click that left it: the change in height would
+        // otherwise move what is being clicked out from under the pointer.
+        let exportPointerDown = false;
+        document.addEventListener('pointerdown', () => { exportPointerDown = true; }, true);
+        ['pointerup', 'pointercancel'].forEach(type =>
+            document.addEventListener(type, () => { exportPointerDown = false; }, true));
+        rerunExportView.addEventListener('focusout', e => {
+            const field = e.target;
+            if (!field.matches('.rerun-export-field') || !field.isConnected) return;
+            if (rerunEntryExists(field.dataset.entryKey)) saveRerunNotes(field.dataset.entryKey, field.value);
+            const close = () => setTimeout(() => {
+                // Focused again (a switch to another window and back, say).
+                if (document.activeElement !== field) closeExportField(field);
+            });
+            if (exportPointerDown) document.addEventListener('pointerup', close, { once: true });
+            else if (document.hasFocus()) close();
+        });
+
+        // Formatted for pasting: inline styles, since a doc or email keeps no
+        // stylesheet, and no icons, which don't survive a paste.
+        function rerunExportHtml(entries) {
+            const { title, detail } = rerunExportHeading(entries);
+            const items = entries.map((entry, i) => {
+                const name = escapeHtml(entry.name);
+                const context = rerunExportContext(entry).map(text => ` · ${escapeHtml(text)}`).join('');
+                return `<h3 style="margin:24px 0 2px">${i + 1}. ${entry.url ? `<a href="${escapeAttr(entry.url)}">${name}</a>` : name}</h3>`
+                    + (entry.code ? `<p style="margin:0;color:#888;font-size:12px"><code>${escapeHtml(entry.code)}</code></p>` : '')
+                    + `<p style="margin:0 0 6px;color:#555"><b style="color:#2c2c2c">${escapeHtml(entry.type?.statement || '')}</b>${context}</p>`
+                    + noteParagraphs(entry.notes).map(({ label, text }) =>
+                        `<p style="margin:0 0 10px">${label ? `<b>${escapeHtml(label)}:</b> ` : ''}${linkParts(text).map(part => {
+                            const shown = escapeHtml(part.text).replace(/\n/g, '<br>');
+                            return part.url ? `<a href="${escapeAttr(part.url)}">${shown}</a>` : shown;
+                        }).join('')}</p>`).join('');
+            }).join('');
+            return `<h2 style="margin:0">${title}</h2><p style="margin:0;color:#555">${escapeHtml(detail)}</p>${items}`;
+        }
+
+        function rerunExportText(entries) {
+            const { title, detail } = rerunExportHeading(entries);
+            return [`${title}\n${detail}`, ...entries.map((entry, i) => [
+                `${i + 1}. ${entry.name}`,
+                entry.code,
+                [entry.type?.statement, ...rerunExportContext(entry)].filter(Boolean).join(' · '),
+                entry.url,
+                ...noteParagraphs(entry.notes).map(({ label, text }) => `\n${label ? `${label}: ` : ''}${text}`)
+            ].filter(Boolean).join('\n'))].join('\n\n');
+        }
+
+        function rerunExportMarkdown(entries) {
+            const { title, detail } = rerunExportHeading(entries);
+            // Names are data, so their Markdown characters are escaped; notes
+            // are the person's own writing and go as typed.
+            const plain = text => String(text).replace(/[\\`*_\[\]<>#|]/g, '\\$&');
+            return [`# ${title}\n\n${detail}`, ...entries.map((entry, i) => [
+                `## ${i + 1}. ${entry.url ? `[${plain(entry.name)}](<${entry.url}>)` : plain(entry.name)}`,
+                [`**${entry.type?.statement || ''}**`, ...rerunExportContext(entry).map(plain),
+                    entry.code && `\`${entry.code.replace(/`/g, '')}\``].filter(Boolean).join(' · '),
+                ...noteParagraphs(entry.notes).map(({ label, text }) => `${label ? `**${label}:** ` : ''}${text}`)
+            ].filter(Boolean).join('\n\n'))].join('\n\n') + '\n';
+        }
+
+        // Puts text (and formatted HTML when given) on the clipboard. The
+        // fallback covers pages not served securely (http:// on a local network).
+        async function copyToClipboard(text, html = '') {
+            try {
+                if (html) {
+                    await navigator.clipboard.write([new ClipboardItem({
+                        'text/plain': new Blob([text], { type: 'text/plain' }),
+                        'text/html': new Blob([html], { type: 'text/html' })
+                    })]);
+                } else {
+                    await navigator.clipboard.writeText(text);
+                }
+                return true;
+            } catch {
+                const onCopy = e => {
+                    e.preventDefault();
+                    e.clipboardData.setData('text/plain', text);
+                    if (html) e.clipboardData.setData('text/html', html);
+                };
+                document.addEventListener('copy', onCopy);
+                const copied = document.execCommand('copy');
+                document.removeEventListener('copy', onCopy);
+                return copied;
+            }
+        }
+
+        function wireShareCopy(id, copy) {
+            const btn = document.getElementById(id);
+            const label = btn.textContent;
+            let timer;
+            btn.addEventListener('click', async () => {
+                const copied = await copy(rerunExportEntries());
+                btn.textContent = copied ? 'Copied ✓' : 'Couldn’t copy';
+                clearTimeout(timer);
+                timer = setTimeout(() => { btn.textContent = label; }, 1800);
+            });
+        }
+        window.addEventListener('beforeprint', closeExportFields);
+        wireShareCopy('shareCopyBtn', entries => copyToClipboard(rerunExportText(entries), rerunExportHtml(entries)));
+        wireShareCopy('shareMarkdownBtn', entries => copyToClipboard(rerunExportMarkdown(entries)));
+        // The document's own rules from styles.css, so the downloaded file looks
+        // like the tab without a second copy of its styling.
+        function rerunExportCss() {
+            const wanted = /:root|\.rerun-export|\.experiment-id/;
+            return Array.from(document.styleSheets)
+                .filter(sheet => sheet.href?.startsWith(location.origin))
+                .flatMap(sheet => Array.from(sheet.cssRules))
+                .filter(rule => rule instanceof CSSMediaRule
+                    ? /\.rerun-export/.test(rule.cssText)
+                    : rule instanceof CSSStyleRule && wanted.test(rule.selectorText) && !rule.selectorText.includes('[data-tab'))
+                .map(rule => rule.cssText)
+                .join('\n');
+        }
+
+        async function imageDataUrl(src) {
+            const response = await fetch(src);
+            if (!response.ok) throw new Error(`Could not read ${src}`);
+            const blob = await response.blob();
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = reject;
+                reader.readAsDataURL(blob);
+            });
+        }
+
+        // The tab as one self-contained file: styles and icons inside it, nothing
+        // to click but its links.
+        async function rerunExportFile() {
+            closeExportFields();
+            const content = rerunExportView.cloneNode(true);
+            content.removeAttribute('id');
+            content.querySelectorAll('.rerun-export-notes').forEach(node => {
+                node.classList.remove('is-editable');
+                node.removeAttribute('tabindex');
+                delete node.dataset.entryKey;
+            });
+            content.querySelectorAll('.rerun-export-add-notes').forEach(node => node.remove());
+            content.querySelectorAll('.rerun-export-tile').forEach(node => {
+                const tile = el('div', { class: 'rerun-export-tile' });
+                tile.innerHTML = node.innerHTML;
+                node.replaceWith(tile);
+            });
+            const dataUrls = new Map();
+            for (const img of content.querySelectorAll('img')) {
+                const src = img.getAttribute('src');
+                try {
+                    if (!dataUrls.has(src)) dataUrls.set(src, await imageDataUrl(src));
+                    img.setAttribute('src', dataUrls.get(src));
+                } catch {
+                    img.remove();
+                }
+            }
+            // Closing tags are escaped: dev servers such as Live Server put
+            // their reload script before the first literal closing body tag in
+            // this file, which would otherwise be this one and cut the script off.
+            return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rerun plan ${localIsoDate()}<\/title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: Mulish, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Ubuntu, sans-serif; background: #fff; }
+${rerunExportCss()}
+.rerun-export { max-width: 1320px; margin: 0 auto !important; padding: 40px 20px; }
+.rerun-export-heading { display: block; padding-bottom: 8px; }
+.rerun-export-heading h1 { font-size: 26px; color: var(--text-strong); }
+.rerun-export-heading p { font-size: 13px; color: var(--text-muted); }
+.rerun-export-tile, .rerun-export-tile:hover { background-color: var(--accent); cursor: default; }
+<\/style>
+<\/head>
+<body class="rerun-export-active">
+<div class="container">${content.outerHTML}<\/div>
+<\/body>
+<\/html>
+`;
+        }
+
+        function localIsoDate() {
+            return new Date().toLocaleDateString('en-CA');  // YYYY-MM-DD, local
+        }
+
+        document.getElementById('shareHtmlBtn').addEventListener('click', async () => {
+            downloadFile(`rerun-plan-${localIsoDate()}.html`, await rerunExportFile(), 'text/html');
+        });
+        document.getElementById('sharePrintBtn').addEventListener('click', () => {
+            // The page title becomes the suggested PDF file name.
+            const title = document.title;
+            document.title = `Rerun plan ${localIsoDate()}`;
+            window.print();
+            document.title = title;
         });
 
         function attachCheckboxListeners() {
@@ -5426,29 +6004,62 @@
             return referenceToggled.has(entryKey) ? !defaultOpen : defaultOpen;
         }
 
-        function buildReferenceToggle(entryKey, open, change, shotCount) {
+        function referenceToggleText(open, change, shotCount) {
             const parts = [
                 change ? 'original change' : null,
                 shotCount ? `${shotCount} screenshot${shotCount === 1 ? '' : 's'}` : null
             ].filter(Boolean).join(' & ');
+            return `${open ? 'Hide' : 'Show'} ${parts}`;
+        }
+
+        function buildReferenceToggle(entryKey, selectionKey, open, change, shotCount) {
             return el('button', {
                 type: 'button',
                 class: 'rerun-reference-toggle' + (open ? ' is-open' : ''),
-                textContent: `${open ? 'Hide' : 'Show'} ${parts}`,
+                textContent: referenceToggleText(open, change, shotCount),
                 'aria-expanded': String(open),
-                dataset: { entryKey }
+                dataset: { entryKey, selectionKey }
             });
         }
 
+        function buildChangeFull(change) {
+            return el('div', { class: 'rerun-change-full' }, [
+                el('div', { class: 'rerun-type-label', textContent: 'Original change' }),
+                el('p', { class: 'rerun-change-full-text', textContent: change })
+            ]);
+        }
+
+        // Opens or closes just this panel's reference section, in place.
+        // Rebuilding every panel (syncRerunNoteRows) would shorten the page
+        // while the images reload, and the browser would move the scroll.
         tableBody.addEventListener('click', function(e) {
             const btn = e.target.closest('.rerun-reference-toggle');
             if (!btn) return;
             e.stopPropagation();
-            commitOpenNotesField();
-            const key = btn.dataset.entryKey;
-            if (referenceToggled.has(key)) referenceToggled.delete(key);
-            else referenceToggled.add(key);
-            syncRerunNoteRows();
+            const { entryKey, selectionKey } = btn.dataset;
+            if (referenceToggled.has(entryKey)) referenceToggled.delete(entryKey);
+            else referenceToggled.add(entryKey);
+
+            const topBefore = btn.getBoundingClientRect().top;
+            const open = !btn.classList.contains('is-open');
+            const noteRow = btn.closest('.rerun-note-row');
+            const item = itemForSelectionKey(selectionKey);
+            const change = item?.change;
+
+            btn.classList.toggle('is-open', open);
+            btn.setAttribute('aria-expanded', String(open));
+            btn.textContent = referenceToggleText(open, change, item?.screenshots?.length || 0);
+
+            noteRow.querySelector('.rerun-change-full')?.remove();
+            if (noteRow.nextElementSibling?.classList.contains('rerun-screenshot-row')) noteRow.nextElementSibling.remove();
+            if (open) {
+                if (change) btn.after(buildChangeFull(change));
+                const screenshotRow = buildRerunScreenshotRow(selectionKey, noteRow.classList.contains('sub-row-note'));
+                if (screenshotRow) noteRow.after(screenshotRow);
+            }
+            // The clicked link stays where it was on screen.
+            const shift = btn.getBoundingClientRect().top - topBefore;
+            if (shift) window.scrollBy(0, shift);
         });
 
         // Each open draft, and each entry on the Rerun tab, carries its tag row
@@ -5456,6 +6067,9 @@
         // sync: they are presentation only -- their values live in rerunDetails
         // -- so there is nothing in them worth preserving across a refresh.
         function syncRerunNoteRows() {
+            // Removing the panels shortens the page for a moment, which can move
+            // the scroll; it is put back once they are rebuilt.
+            const scrollBefore = window.scrollY;
             document.querySelectorAll('.rerun-note-row, .rerun-tag-row, .rerun-screenshot-row').forEach(el => el.remove());
 
             const colspan = tableColumnCount();
@@ -5483,7 +6097,11 @@
                         dataset: { entryKey }
                     });
                     const notes = el('div', { class: 'rerun-notes-group' }, [
-                        el('label', { class: 'rerun-type-label', htmlFor: fieldId, textContent: 'Notes' }),
+                        el('div', { class: 'rerun-notes-heading' }, [
+                            el('label', { class: 'rerun-type-label', htmlFor: fieldId, textContent: 'Notes' }),
+                            // See noteParagraphs().
+                            el('span', { class: 'rerun-notes-hint', textContent: 'Start a line with LABEL: to show it as a pill in Export' })
+                        ]),
                         field
                     ]);
 
@@ -5499,7 +6117,7 @@
 
                     // Stacked top to bottom: test type, then notes, then the
                     // panel's action -- reads like a short form rather than a
-                    // row of side-by-side controls. Below a divider, reference
+                    // row of side-by-side controls. Below it, reference
                     // material (the original change, then screenshots) behind
                     // its own show/hide toggle, since it can be very tall.
                     const noteRow = el('tr', { class: 'rerun-note-row' + (isSubRow ? ' sub-row-note' : '') },
@@ -5508,12 +6126,8 @@
                                 buildRerunTypePicker(entryKey),
                                 notes,
                                 buildRerunPanelAction(row, state),
-                                hasReference ? el('hr', { class: 'rerun-panel-divider' }) : null,
-                                hasReference ? buildReferenceToggle(entryKey, referenceOpen, change, shotCount) : null,
-                                referenceOpen && change ? el('div', { class: 'rerun-change-full' }, [
-                                    el('div', { class: 'rerun-type-label', textContent: 'Original change' }),
-                                    el('p', { class: 'rerun-change-full-text', textContent: change })
-                                ]) : null
+                                hasReference ? buildReferenceToggle(entryKey, row.dataset.selectionKey, referenceOpen, change, shotCount) : null,
+                                referenceOpen && change ? buildChangeFull(change) : null
                             ].filter(Boolean))));
 
                     // Tags, then notes (which carries the Rerun button), then
@@ -5527,6 +6141,7 @@
                     // document and has a width to wrap against.
                     autoGrowNotesField(field);
                 });
+            if (window.scrollY !== scrollBefore) window.scrollTo(0, scrollBefore);
         }
 
         // Each "Reruns:" tile jumps straight to its own entry on the Rerun
@@ -5635,7 +6250,7 @@
         }, true);
 
         // Move focus into the notes field belonging to a row, if it has one.
-        function focusNotesFieldFor(row) {
+        function focusNotesFieldFor(row, options) {
             if (!row) return;
             // The screenshot/tag rows sit between a row and its notes field,
             // so walk the siblings that belong to this row rather than
@@ -5647,7 +6262,7 @@
                 el = el.nextElementSibling;
             }
             if (!field) return;
-            field.focus();
+            field.focus(options);
             field.setSelectionRange(field.value.length, field.value.length);
         }
 
@@ -5723,7 +6338,8 @@
         // dataset rather than the rendered page. One pass for all tabs: each row
         // is tested against every tab's predicate once.
         function updateTabCountBadges() {
-            const badges = document.querySelectorAll('.tab-count-badge');
+            // Rule matches only: the Don't Rerun badge counts decisions instead.
+            const badges = document.querySelectorAll('.tab-count-badge[data-count-for]');
             if (!badges.length) return;
 
             const counts = {};
@@ -5845,6 +6461,11 @@
                     : config.subtitle;
                 return;
             }
+            if (tabType === 'rerun-export') {
+                const n = rerunInstances.length;
+                subtitle.textContent = n ? `${n} rerun${n === 1 ? '' : 's'}, ready to share.` : config.subtitle;
+                return;
+            }
             const declined = view.rows.filter(row => rowMatchesTab(row, tabType) && isDeclined(row.selectionKey)).length;
             subtitle.textContent = (totalCount > 0 && config.countSubtitle
                 ? config.countSubtitle(matchCount, totalCount)
@@ -5875,7 +6496,7 @@
             // A different tab means a different result set, so restart at page 1.
             view.page = 0;
 
-            if (tabType !== 'rerun' && !keepSort) {
+            if (tabType !== 'rerun' && tabType !== 'rerun-export' && !keepSort) {
                 // Sort highlighted rows to the top, with tab-specific ordering
                 sortByHighlighted(tabType);
             }
@@ -6084,10 +6705,13 @@
             jumpToHighlight(e.key === 'ArrowDown' ? 1 : -1);
         });
 
+        const STAT_SIG_TIP = 'Each test judged on its own hypothesis: a significant positive effect, or for a non-inferiority test, shown to be no worse than its margin. Tests without a primary result are left out.';
+
         // Every element updateSummaryBar() writes, so clearing them is one list.
         const SUMMARY_FIELDS = [
-            'sensitivityThresholds', 'successRateValue', 'successRateIterValue',
-            'fprValue', 'medianEffectValue', 'medianEffectIterValue', 'medianMdeAt80Value'
+            'sensitivityThresholds', 'successRateValue',
+            'fprValue', 'successCountValue', 'medianEffectValue', 'medianMdeAt80Value',
+            'fprCountValue', 'medianEffectCountValue', 'medianMdeCountValue'
         ];
 
         // Writes one summary figure and its colour band. `bands` is read in order
@@ -6104,7 +6728,7 @@
         }
 
         function updateSummaryBar(allExperiments = calculatedExperimentsData) {
-            const MDE_THRESHOLDS = [0.5, 1, 2, 5, 10, 15];
+            const MDE_THRESHOLDS = [1, 2, 5, 10, 15];
             const ALPHA = getSelectedAlpha();
             const POWER_THRESHOLD = 80;
             // Ceiling for the MDE-at-80%-power search: an experiment that still
@@ -6126,6 +6750,11 @@
                 return;
             }
 
+            // The small "n tests" lines under the panels' numbers.
+            const COUNT_CLASS = 'summary-metric-count';
+            // "x of N tests": N is every test with a result, the same in each panel.
+            const ofTests = x => `${x} of ${total} test${total === 1 ? '' : 's'}`;
+
             // 1. Testing Sensitivity
             const container = document.getElementById('sensitivityThresholds');
             // Power needs a continuous metric's spread (primaryCV); tests
@@ -6143,9 +6772,15 @@
             // question turned around to "what effect could THIS test have
             // caught?" Power rises monotonically with MDE, so a binary
             // search inverts recalculatePower without needing a closed form.
+            // A test that can't reach 80% even at the search ceiling counts as
+            // the ceiling: it sorts to the top, so the median stays a real
+            // test's MDE unless over half are that underpowered. Only a test
+            // with no power at all (no spread, or a base rate of 0) is null.
             function mdeAt80Power(exp) {
                 const power = mde => powerAt(exp, mde);
-                if (power(MDE_SEARCH_MAX) < POWER_THRESHOLD) return null; // not even reached at the search ceiling
+                const atCeiling = power(MDE_SEARCH_MAX);
+                if (atCeiling == null) return null;
+                if (atCeiling < POWER_THRESHOLD) return MDE_SEARCH_MAX;
                 let lo = 0, hi = MDE_SEARCH_MAX;
                 for (let i = 0; i < 30; i++) {
                     const mid = (lo + hi) / 2;
@@ -6160,39 +6795,58 @@
                 const mid = Math.floor(sorted.length / 2);
                 return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
             }
-            // Drive the uniform color off the custom MDE input: the whole histogram
-            // reflects coverage at the user's chosen MDE (low → red, high → green).
+            const mdeAt80Values = experiments.map(mdeAt80Power).filter(v => v !== null);
+            const medianMdeAt80 = median(mdeAt80Values);
+            // Lower is better: up to 5% green, up to 15% orange, above red.
+            const medianMdeBand = medianMdeAt80 > 15 ? 'metric-danger' : medianMdeAt80 > 5 ? 'metric-warning' : 'metric-good';
+            const formatMde = v => `${v < 10 ? (Math.round(v * 10) / 10).toFixed(1) : Math.round(v)}%`;
+
             const selectedMde = getSelectedMde();
-            const uniformColor = sensitivityColor(poweredPctAt(selectedMde));
+            document.getElementById('sensitivitySubtitle').textContent = `% of tests with ≥80% power · per ${selectedMde}% MDE`;
             // Build the column list; if the selected MDE isn't a standard threshold,
             // splice it in at the right sorted position as an extra column.
             const stdMax = Math.max(...MDE_THRESHOLDS);
             const columns = MDE_THRESHOLDS.slice();
-            if (!columns.includes(selectedMde)) {
-                columns.push(selectedMde);
-                columns.sort((a, b) => a - b);
+            if (!columns.includes(selectedMde)) columns.push(selectedMde);
+            // The Median MDE panel's figure, as its own column in that panel's
+            // colour: about half the tests reach 80% power there, by definition.
+            // Shown as rounded; a value already on the scale marks that column.
+            let medianColumn = null;
+            if (medianMdeAt80 !== null && medianMdeAt80 < MDE_SEARCH_MAX) {
+                const rounded = parseFloat(formatMde(medianMdeAt80));
+                medianColumn = columns.includes(rounded) ? rounded : medianMdeAt80;
+                if (!columns.includes(medianColumn)) columns.push(medianColumn);
             }
+            columns.sort((a, b) => a - b);
+            const lastColumn = columns[columns.length - 1];
             container.innerHTML = columns.map(mde => {
-                const mdeLabel = mde === stdMax ? `${mde}%+` : `${mde}%`;
+                const isMedian = mde === medianColumn;
+                // "15%+" only while 15% ends the scale.
+                const mdeLabel = isMedian ? formatMde(mde) : mde === stdMax && mde === lastColumn ? `${mde}%+` : `${mde}%`;
                 const pctRaw = poweredPctAt(mde);
                 const pct = pctRaw >= 10 ? Math.round(pctRaw) : Math.round(pctRaw * 10) / 10;
-                const pctDisplay = pctRaw >= 10 ? pct + '%' : pct.toFixed(1) + '%';
+                // None at all reads "0%", not "0.0%".
+                const pctDisplay = pctRaw < 0.05 ? '0%' : pctRaw >= 10 ? pct + '%' : pct.toFixed(1) + '%';
                 // Highlight the column matching the selected MDE
                 const isSelected = mde === selectedMde;
                 const selCls = isSelected ? ' sensitivity-selected' : '';
-                // Selected bar is dark gray; 0% gets a neutral gray fill; the rest
-                // share the uniform coverage color.
+                // Real values are dark bars; a 0% column is a grey hairline.
                 const isZero = pctRaw < 0.05;
-                const bg = isSelected ? '#333' : (isZero ? '#d0d0d0' : uniformColor);
-                // Bar height encodes the % (min 3px so 0% is still a visible sliver).
+                const bg = isMedian ? `var(${{ 'metric-good': '--success', 'metric-warning': '--warning', 'metric-danger': '--danger' }[medianMdeBand]})`
+                    : isZero ? '#d0d0d0' : '#2c2c2c';
+                // Bar height encodes the %: 0% is a 1px hairline, any real value
+                // at least 3px, so the first non-zero column visibly steps up.
                 // Capped shorter than the panel's own content height so the
                 // percentage row above it doesn't drift far from the other
                 // panels' headline-number baseline (see .summary-threshold-bararea).
-                const barHeight = Math.max(3, Math.round(pctRaw / 100 * 24));
-                // Dim the % number and MDE tick for zero columns; dark for real values
-                const pctColor = isZero ? '#c0c0c0' : '#2c2c2c';
-                const mdeColor = isZero ? '#c0c0c0' : '#2c2c2c';
-                return `<span class="summary-threshold-column${selCls}">
+                const barHeight = isZero ? 1 : Math.max(3, Math.round(pctRaw / 100 * 24));
+                // Dim the % number for zero columns; dark for real values; the
+                // median MDE column in its panel's colour throughout.
+                const pctColor = isMedian ? bg : isZero ? '#c0c0c0' : '#2c2c2c';
+                // The MDE row is quiet, like the panels' "x of N tests" lines.
+                const mdeColor = isMedian ? bg : 'var(--text-subtle)';
+                const tip = isMedian ? ` data-tip="Median MDE: half the tests reach 80% power at a ${formatMde(mde)} effect."` : '';
+                return `<span class="summary-threshold-column${selCls}${isMedian ? ' sensitivity-median' : ''}"${tip}>
                     <span class="summary-threshold-bararea">
                         <span class="summary-threshold-pct" style="color:${pctColor}">${pctDisplay}</span>
                         <span class="summary-threshold-bar" style="height:${barHeight}px; background-color:${bg}"></span>
@@ -6200,47 +6854,40 @@
                     <span class="summary-threshold-label" style="color:${mdeColor}">${mdeLabel}</span>
                 </span>`;
             }).join('');
+            // What the two rows are: the % of tests, then the MDE.
+            container.insertAdjacentHTML('afterbegin', `<span class="summary-threshold-rowlabels" aria-hidden="true">
+                    <span class="summary-threshold-rowlabel">EXP</span>
+                    <span class="summary-threshold-rowlabel">MDE</span>
+                </span>`);
 
-            const mdeAt80Values = experiments.map(mdeAt80Power).filter(v => v !== null);
-            const medianMdeAt80 = median(mdeAt80Values);
+            // Tests without a spread or a base rate can't be sized.
+            writeSummaryStat('medianMdeCountValue', ofTests(mdeAt80Values.length), { className: COUNT_CLASS });
             if (medianMdeAt80 === null) {
                 writeSummaryStat('medianMdeAt80Value', '—', { className: 'summary-metric-value summary-metric-empty' });
             } else {
-                writeSummaryStat('medianMdeAt80Value',
-                    `${medianMdeAt80 < 10 ? medianMdeAt80.toFixed(1) : Math.round(medianMdeAt80)}%`, {
-                        // Lower is better: up to 5% green, up to 15% orange, above red.
-                        bands: [[medianMdeAt80 > 15, 'metric-danger'], [medianMdeAt80 > 5, 'metric-warning'],
-                                [true, 'metric-good']]
-                    });
+                writeSummaryStat('medianMdeAt80Value', medianMdeAt80 >= MDE_SEARCH_MAX ? `>${MDE_SEARCH_MAX}%`
+                    : formatMde(medianMdeAt80), { bands: [[true, medianMdeBand]] });
             }
 
             const isSuccess = exp => exp.primaryMetric > 0 && exp.pvalue !== null && exp.pvalue < ALPHA;
-            // A test counts as an iteration only if it's tagged with iterations >= 1.
-            // Untagged tests (no iterations field) are first-time tests.
-            const isIteration = exp => (exp.iterations || 0) >= 1;
-
-            // Success Rate and FPR count only tests that were trying to win: a
-            // non-inferiority test's goal was "no worse", so it is neither a
-            // win nor a loss here.
+            // FPR counts only tests that were trying to win: a non-inferiority
+            // test's goal was "no worse", so it is neither a win nor a loss there.
             const winTests = experiments.filter(exp => exp.hypothesis !== 'non-inferiority');
+            const niTests = experiments.filter(exp => exp.hypothesis === 'non-inferiority');
 
-            // 2. Success Rate, shown twice: once for first-time tests and once for
-            // those tagged as iterations. Same calculation, different population.
-            const firstTimeExperiments = winTests.filter(exp => !isIteration(exp));
-            const iterExperiments = winTests.filter(isIteration);
-
-            const renderSuccessRate = (elId, exps) => {
-                if (exps.length === 0) {
-                    writeSummaryStat(elId, '—', { className: 'summary-metric-value summary-metric-empty' });
-                    return;
-                }
-                const rate = Math.round((exps.filter(isSuccess).length / exps.length) * 100);
-                writeSummaryStat(elId, rate + '%', {
-                    bands: [[rate >= 20, 'metric-good'], [rate >= 10, 'metric-warning'], [true, 'metric-danger']]
-                });
-            };
-            renderSuccessRate('successRateValue', firstTimeExperiments);
-            renderSuccessRate('successRateIterValue', iterExperiments);
+            // 2. Stat-Sig Rate: every test with a result, each on its own
+            // hypothesis. A non-inferiority test's p is already its one-sided
+            // test against the margin (hypothesisPValue), so p < alpha means
+            // "no worse" was shown.
+            const winCount = winTests.filter(isSuccess).length;
+            const niCount = niTests.filter(exp => exp.pvalue != null && exp.pvalue < ALPHA).length;
+            const sigRate = Math.round(((winCount + niCount) / experiments.length) * 100);
+            writeSummaryStat('successRateValue', sigRate + '%', {
+                bands: [[sigRate >= 20, 'metric-good'], [sigRate >= 10, 'metric-warning'], [true, 'metric-danger']]
+            });
+            writeSummaryStat('successCountValue', ofTests(winCount + niCount), { className: COUNT_CLASS });
+            document.getElementById('successRatePanel').dataset.tip = STAT_SIG_TIP
+                + (niTests.length ? `\n\n${winCount} win${winCount === 1 ? '' : 's'}, ${niCount} non-inferior.` : '');
 
             // 3. False Positive Risk (Kohavi & Chen, 2024)
             // FPR = α⁺(1-π) / (α⁺(1-π) + power×π), where α⁺ = α/2: wins are positive, two-sided p-values
@@ -6260,10 +6907,12 @@
             const fprPanel = document.getElementById('fprPanel');
             const method = getPowerMethod();
             const estimatedCount = experiments.filter(e => e.pvalueEstimated).length;
-            const sequentialCount = experiments.filter(e => e.powerApprox).length;
+            const sequentialCount = experiments.filter(e => e.sequentialLens).length;
             const approxReasons = [];
             if (sequentialCount) approxReasons.push(method === 'sequential'
                 ? 'under sequential (mSPRT), the always-valid test keeps false wins at or below α however often it’s checked, so α is used as an upper bound and the figure leans conservative'
+                : method === 'group'
+                ? 'under group sequential, false wins stay at or below α (its futility stop is non-binding), so α is used as an upper bound and the figure leans conservative'
                 : `${sequentialCount} test${sequentialCount === 1 ? '' : 's'} read as sequential (by design, or with no method recorded), where α is only an upper bound on false wins`);
             if (estimatedCount) approxReasons.push(`${estimatedCount} p-value${estimatedCount === 1 ? '' : 's'} estimated because the platform reported none`);
             const approximate = approxReasons.length > 0;
@@ -6277,7 +6926,9 @@
             const alphaPos = ALPHA / 2;
             if (overallSuccessCount === 0) {
                 writeSummaryStat('fprValue', null);
+                writeSummaryStat('fprCountValue', null, { className: COUNT_CLASS });
             } else {
+                writeSummaryStat('fprCountValue', `from ${overallSuccessCount} sig. win${overallSuccessCount === 1 ? '' : 's'}`, { className: COUNT_CLASS });
                 const pi = Math.min(1, Math.max(0, (winRate - alphaPos) / (ASSUMED_POWER - alphaPos)));
                 const fpr = (alphaPos * (1 - pi)) / (alphaPos * (1 - pi) + ASSUMED_POWER * pi);
                 const fprPct = Math.round(fpr * 100);
@@ -6287,27 +6938,13 @@
                 });
             }
 
-            // 4. Median Relative Effect — shown inside each Success Rate panel
-            const renderMedian = (elId, exps) => {
-                const MEDIAN_CLASS = 'summary-metric-median-value';
-                const effects = exps
-                    .map(exp => exp.primaryMetric)
-                    .filter(v => v !== null && v !== undefined && !isNaN(v))
-                    .sort((a, b) => a - b);
-                if (effects.length === 0) {
-                    writeSummaryStat(elId, null, { className: MEDIAN_CLASS });
-                    return;
-                }
-                const mid = Math.floor(effects.length / 2);
-                const median = effects.length % 2 !== 0
-                    ? effects[mid]
-                    : (effects[mid - 1] + effects[mid]) / 2;
-                writeSummaryStat(elId, (median > 0 ? '+' : '') + median.toFixed(1) + '%', {
-                    className: MEDIAN_CLASS
-                });
-            };
-            renderMedian('medianEffectValue', firstTimeExperiments);
-            renderMedian('medianEffectIterValue', iterExperiments);
+            // 4. Median Impact: the primary effect across every test with one
+            // (`experiments` already holds only those).
+            const medianEffect = median(experiments.map(exp => Number(exp.primaryMetric)));
+            writeSummaryStat('medianEffectValue', (medianEffect > 0 ? '+' : '') + medianEffect.toFixed(1) + '%', {
+                bands: [[medianEffect > 0, 'metric-good'], [medianEffect < 0, 'metric-danger']]
+            });
+            writeSummaryStat('medianEffectCountValue', ofTests(total), { className: COUNT_CLASS });
         }
 
         // ---- Editable tab parameter panel ----
@@ -6430,6 +7067,7 @@
                 const placeholderTabs = ['segments', 'patterns', 'custom'];
                 document.getElementById('placeholderPanel').classList.toggle('visible', placeholderTabs.includes(tabType));
                 document.getElementById('rerunActionsPanel').classList.toggle('visible', tabType === 'rerun');
+                document.getElementById('rerunSharePanel').classList.toggle('visible', tabType === 'rerun-export');
 
                 // Render the editable parameter panel for this tab
                 renderTabParamsPanel(tabType);
@@ -6564,7 +7202,7 @@
         // reported is unavailable, and must know to switch back afterwards.
         const powerMethodSelect = document.getElementById('powerMethodSelect');
         const savedPowerMethod = readStored(POWER_METHOD_KEY);
-        powerMethodSelect.dataset.preferred = ['reported', 'fixed', 'sequential'].includes(savedPowerMethod)
+        powerMethodSelect.dataset.preferred = POWER_METHODS.includes(savedPowerMethod)
             ? savedPowerMethod
             : 'reported';
         syncMethodAvailability(experimentsData);
